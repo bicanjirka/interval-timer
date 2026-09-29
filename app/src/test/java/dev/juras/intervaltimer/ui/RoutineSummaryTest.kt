@@ -43,3 +43,24 @@ class RoutineSummaryTest {
         assertEquals("2 blocks · 0:20", routine.summary())
     }
 }
+
+class RoutineTitleTest {
+    private val eightByForty = Routine.repeat("", workSeconds = 40, restSeconds = 20, rounds = 8, getReadySeconds = 0)
+
+    @Test
+    fun aNamedRoutineIsTitledByItsName() {
+        assertEquals("Legs", eightByForty.copy(name = "Legs").title())
+        assertEquals("8 × 40 s work / 20 s rest · 7:40", eightByForty.copy(name = "Legs").subtitle())
+    }
+
+    @Test
+    fun anUnnamedRoutineIsLabelledByItsContent() {
+        assertEquals("8 × 40 s work / 20 s rest", eightByForty.title())
+        assertEquals("7:40", eightByForty.subtitle())
+    }
+
+    @Test
+    fun aBlankNameCountsAsNoName() {
+        assertEquals("8 × 40 s work / 20 s rest", eightByForty.copy(name = "  ").title())
+    }
+}

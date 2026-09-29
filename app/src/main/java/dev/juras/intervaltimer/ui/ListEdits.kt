@@ -13,3 +13,7 @@ fun <T> List<T>.duplicated(index: Int): List<T> =
 fun <T> List<T>.without(index: Int): List<T> = filterIndexed { i, _ -> i != index }
 
 fun <T> List<T>.replaced(index: Int, item: T): List<T> = mapIndexed { i, old -> if (i == index) item else old }
+
+/** The next multiple of [step] above (direction 1) or below (-1) [value], so 42 steps to 45 and 40 rather than 47 and 37. */
+fun stepped(value: Int, direction: Int, step: Int): Int =
+    if (direction > 0) (Math.floorDiv(value, step) + 1) * step else -Math.floorDiv(-value, step) * step - step

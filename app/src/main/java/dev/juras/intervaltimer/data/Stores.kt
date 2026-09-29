@@ -82,6 +82,17 @@ class RoutineStore(context: Context) {
 
     suspend fun delete(id: String) = modify { list -> list.filterNot { it.id == id } }
 
+    /** Puts the routine at [index] (clamped), replacing any routine with the same id. */
+    suspend fun insert(routine: Routine, index: Int) = modify { list ->
+        val rest = list.filterNot { it.id == routine.id }
+        rest.toMutableList().also { it.add(index.coerceIn(0, rest.size), routine) }
+    }
+
+    /** Orders the routines as [ids] say; routines not named keep their relative order after those that are. */
+    suspend fun reorder(ids: List<String>) = modify { list ->
+        list.sortedBy { r -> ids.indexOf(r.id).let { if (it < 0) Int.MAX_VALUE else it } }
+    }
+
     private suspend fun modify(change: (List<Routine>) -> List<Routine>) {
         store.edit { prefs ->
             val current = prefs[ROUTINES]?.let { runCatching { RoutineJson.decode(it) }.getOrNull() }

@@ -37,3 +37,31 @@ class ListEditsTest {
         assertEquals(listOf("a", "x", "c"), abc.replaced(1, "x"))
     }
 }
+
+class SteppedTest {
+    @Test
+    fun aMultipleStepsByExactlyOneStep() {
+        assertEquals(45, stepped(40, 1, 5))
+        assertEquals(35, stepped(40, -1, 5))
+    }
+
+    @Test
+    fun otherValuesSnapToTheNextMultiple() {
+        assertEquals(45, stepped(42, 1, 5))
+        assertEquals(40, stepped(42, -1, 5))
+    }
+
+    @Test
+    fun aStepOfOneCountsByOne() {
+        assertEquals(9, stepped(8, 1, 1))
+        assertEquals(7, stepped(8, -1, 1))
+    }
+
+    @Test
+    fun negativeValuesStepTheSameWay() {
+        assertEquals(-5, stepped(-10, 1, 5))
+        assertEquals(-15, stepped(-10, -1, 5))
+        assertEquals(-5, stepped(-7, 1, 5))
+        assertEquals(-10, stepped(-7, -1, 5))
+    }
+}

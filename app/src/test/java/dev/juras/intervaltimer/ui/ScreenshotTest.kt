@@ -1,5 +1,6 @@
 package dev.juras.intervaltimer.ui
 
+import androidx.compose.material3.SnackbarHostState
 import androidx.compose.runtime.Composable
 import androidx.compose.ui.test.junit4.createComposeRule
 import androidx.compose.ui.test.onRoot
@@ -44,7 +45,7 @@ class ScreenshotTest {
     }
 
     private fun running(state: TimerState) = @Composable {
-        RunningScreen(state, keepScreenOn = false, onPause = {}, onResume = {}, onSkip = {}, onStop = {}, onClose = {})
+        RunningScreen(state, keepScreenOn = false, snackbarHostState = SnackbarHostState(), onPause = {}, onResume = {}, onSkip = {}, onStop = {}, onClose = {})
     }
 
     private val tenByOneMinute = DefaultRoutines.all()[0]
@@ -63,19 +64,35 @@ class ScreenshotTest {
     fun runningWorkUntilDoneScreen() = capture("running-until-done", running(stateAt(untilDone, 5.0 + 42.0)))
 
     @Test
+    fun runningTwoMinuteScreen() = capture("running-long", running(stateAt(Routine.timer("Plank", 300, 0), 100.0)))
+
+    @Test
     fun finishedScreen() = capture("finished", running(stateAt(Routine.timer("t", 5, 0), 6.0)))
+
+    @Test
+    fun finishedUntilDoneScreen() {
+        val clock = FakeClock()
+        val engine = TimerEngine(Routine.untilDone("Pull-ups", restSeconds = 60, sets = 4, getReadySeconds = 0), clock).also { it.start() }
+        listOf(42.0, 38.0, 45.0, 31.0).forEachIndexed { i, work ->
+            clock.advanceSeconds(work)
+            engine.skip()
+            if (i < 3) clock.advanceSeconds(60.0)
+        }
+        capture("finished-until-done", running(engine.state()))
+    }
 
     @Test
     fun routineListScreen() = capture("list") {
         RoutineListScreen(
-            routines = DefaultRoutines.all() + Routine.repeat("Legs 8 × 40 s / 20 s", 40, 20, 8),
-            onStart = {}, onEdit = {}, onDuplicate = {}, onNew = {}, onSettings = {},
+            routines = DefaultRoutines.all() + Routine.repeat("Legs 8 × 40 s / 20 s", 40, 20, 8) + Routine.repeat("", 30, 15, 6),
+            snackbarHostState = SnackbarHostState(),
+            onStart = {}, onEdit = {}, onDuplicate = {}, onDelete = {}, onReorder = {}, onNew = {}, onSettings = {},
         )
     }
 
     @Test
     fun editorScreen() = capture("editor") {
-        RoutineEditorScreen(untilDone, canDelete = true, onChange = {}, onDone = {}, onDelete = {})
+        RoutineEditorScreen(untilDone, onChange = {}, onDone = {})
     }
 
     @Test

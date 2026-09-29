@@ -22,6 +22,7 @@ import dev.juras.intervaltimer.engine.TimerEngine
 import dev.juras.intervaltimer.engine.TimerState
 import dev.juras.intervaltimer.engine.formatSeconds
 import dev.juras.intervaltimer.log.AppLog
+import dev.juras.intervaltimer.ui.title
 import kotlinx.coroutines.CancellationException
 import kotlinx.coroutines.CoroutineScope
 import kotlinx.coroutines.Dispatchers
@@ -42,6 +43,8 @@ class TimerService : Service() {
     private val scope = CoroutineScope(SupervisorJob() + Dispatchers.Main)
     private var engine: TimerEngine? = null
     private var loop: Job? = null
+    private var stopJob: Job? = null
+    private var pausedBeforeStop = false
     private lateinit var cues: CuePlayer
     private lateinit var wakeLock: PowerManager.WakeLock
     private val settingsStore by lazy { SettingsStore(this) }
@@ -62,10 +65,11 @@ class TimerService : Service() {
         try {
             when (action) {
                 ACTION_START -> intent.getStringExtra(EXTRA_ROUTINE)?.let { begin(RoutineJson.decode(it).first()) }
-                ACTION_PAUSE -> engine?.pause()
-                ACTION_RESUME -> engine?.resume()
-                ACTION_SKIP -> engine?.skip()
-                ACTION_STOP -> end()
+                ACTION_PAUSE -> { cancelStop(restore = false); engine?.pause() }
+                ACTION_RESUME -> { cancelStop(restore = false); engine?.resume() }
+                ACTION_SKIP -> { cancelStop(restore = false); engine?.skip() }
+                ACTION_STOP -> requestStop()
+                ACTION_UNDO_STOP -> cancelStop(restore = true)
             }
         } catch (e: Exception) {
             AppLog.e(TAG, "command $action failed", e)
@@ -85,6 +89,7 @@ class TimerService : Service() {
     }
 
     private fun begin(routine: Routine) {
+        cancelStop(restore = false)
         loop?.cancel()
         val timer = TimerEngine(routine) { SystemClock.elapsedRealtime() }
         engine = timer
@@ -171,13 +176,45 @@ class TimerService : Service() {
         stopSelf()
     }
 
+    /**
+     * Stop is not final at once: the routine is paused for [STOP_GRACE_MS] while the UI offers "Undo stop",
+     * and only then really ends. Asking again during that time changes nothing.
+     */
+    private fun requestStop() {
+        val timer = engine ?: return
+        if (stopJob?.isActive == true) return
+        pausedBeforeStop = timer.state().status == Status.PAUSED
+        timer.pause()
+        AppLog.i(TAG, "stop requested, ending in $STOP_GRACE_MS ms unless undone")
+        mutablePendingStop.value = true
+        stopJob = scope.launch {
+            delay(STOP_GRACE_MS)
+            end()
+        }
+    }
+
+    /** Drops a pending stop; [restore] also continues the routine unless it was paused before. */
+    private fun cancelStop(restore: Boolean) {
+        val pending = stopJob?.isActive == true
+        stopJob?.cancel()
+        stopJob = null
+        mutablePendingStop.value = false
+        if (pending) {
+            AppLog.i(TAG, "stop undone")
+            if (restore && !pausedBeforeStop) engine?.resume()
+        }
+    }
+
     private fun end() {
         AppLog.i(TAG, "routine stopped by the user")
+        stopJob = null
+        mutablePendingStop.value = false
         loop?.cancel()
         engine = null
         mutableState.value = null
         stopForeground(STOP_FOREGROUND_REMOVE)
         if (wakeLock.isHeld) wakeLock.release()
+        stopSelf()
     }
 
     private fun keepAwake(state: TimerState) {
@@ -236,6 +273,7 @@ class TimerService : Service() {
         private const val ACTION_RESUME = "dev.juras.intervaltimer.RESUME"
         private const val ACTION_SKIP = "dev.juras.intervaltimer.SKIP"
         private const val ACTION_STOP = "dev.juras.intervaltimer.STOP"
+        private const val ACTION_UNDO_STOP = "dev.juras.intervaltimer.UNDO_STOP"
         private const val EXTRA_ROUTINE = "routine"
         private const val CHANNEL = "timer"
         private const val NOTIFICATION_ID = 1
@@ -246,17 +284,22 @@ class TimerService : Service() {
         private const val DONE_SPEECH_DELAY_MS = 900L
         private const val FINISH_LINGER_MS = 5000L
         private const val WAKE_SLACK_MS = 60_000L
+        private const val STOP_GRACE_MS = 3000L
 
         private val mutableState = MutableStateFlow<TimerState?>(null)
+        private val mutablePendingStop = MutableStateFlow(false)
 
         /** The running (or just finished) routine, null when nothing is running. */
         val state: StateFlow<TimerState?> = mutableState
 
+        /** True during the few seconds after Stop when it can still be undone. */
+        val stopPending: StateFlow<Boolean> = mutablePendingStop
+
         fun start(context: Context, routine: Routine) {
             val intent = Intent(context, TimerService::class.java)
                 .setAction(ACTION_START)
-                .putExtra(EXTRA_ROUTINE, RoutineJson.encode(listOf(routine)))
-            AppLog.i(TAG, "start requested for '${routine.name}'")
+                .putExtra(EXTRA_ROUTINE, RoutineJson.encode(listOf(routine.copy(name = routine.title()))))
+            AppLog.i(TAG, "start requested for '${routine.title()}'")
             try {
                 context.startForegroundService(intent)
             } catch (e: Exception) {
@@ -268,6 +311,7 @@ class TimerService : Service() {
         fun resume(context: Context) = send(context, ACTION_RESUME)
         fun skip(context: Context) = send(context, ACTION_SKIP)
         fun stop(context: Context) = send(context, ACTION_STOP)
+        fun undoStop(context: Context) = send(context, ACTION_UNDO_STOP)
 
         /** Clears the finished state once the user has seen it. */
         fun dismiss() {
