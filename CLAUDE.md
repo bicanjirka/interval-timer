@@ -50,7 +50,11 @@ Personal ad-free interval timer for the user's Google Pixel 11 (Android 17, API 
 - **Foreground service** (`service`) runs the routine so it survives screen-off: persistent notification with pause, resume, skip; `POST_NOTIFICATIONS` runtime permission; a declared foreground service type (Android 14+). It publishes engine state as one immutable snapshot (StateFlow); the UI only reads that and sends events.
 - **Screen on** during a session via `FLAG_KEEP_SCREEN_ON`; Doze exemption prompt only if needed.
 - **UI** (`ui`): stateless composables (state in, events out). Running screen: giant countdown digits, full-screen colour per phase, current and next phase, round counter, total remaining time, large pause/skip/stop buttons, dark by default. Text in `strings.xml`.
-- Packages by feature: `engine`, `service`, `data`, `ui`.
+- Packages by feature: `engine` (`Routine`/`Block`/`Phase`, `Timeline`, `TimerEngine`, `formatSeconds`), `service` (`TimerService`, `AudioCues`), `data` (`RoutineJson`, `RoutineStore`, `SettingsStore`), `ui` (screens, `AppViewModel`, `theme`).
+- **Timeline rule:** a rest phase at the end of a block's last round is dropped (the next block, block rest or the end follows); zero-length steps are skipped. Deltas apply per round with a minimum.
+- **Screen flow:** `App` shows `RunningScreen` whenever `TimerService.state` is non-null, else the screen `AppViewModel` is on (list, editor, settings). Leaving the editor saves. Stop asks for confirmation.
+- **Storage:** all routines are one JSON string in DataStore; new fields need defaults. Default routines have fixed ids.
+- Open items and the on-phone checklist are in `TODO.md`; the service and audio code have not been run on a device yet.
 
 ## Audio
 - Own timer volume slider, separate from media volume.

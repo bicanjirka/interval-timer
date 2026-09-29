@@ -163,6 +163,7 @@ class TimerService : Service() {
             .setOnlyAlertOnce(true)
             .setShowWhen(false)
             .setVisibility(Notification.VISIBILITY_PUBLIC)
+            .setForegroundServiceBehavior(Notification.FOREGROUND_SERVICE_IMMEDIATE)
             .addAction(action(if (paused) ACTION_RESUME else ACTION_PAUSE, if (paused) R.string.resume else R.string.pause))
             .addAction(action(ACTION_SKIP, R.string.skip))
             .addAction(action(ACTION_STOP, R.string.stop))
