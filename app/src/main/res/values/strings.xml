@@ -1,3 +1,11 @@
 <resources>
     <string name="app_name">Interval Timer</string>
+    <string name="channel_name">Running timer</string>
+    <string name="pause">Pause</string>
+    <string name="resume">Resume</string>
+    <string name="skip">Skip</string>
+    <string name="stop">Stop</string>
+    <string name="done_spoken">Done</string>
+    <string name="total_left">%1$s left</string>
+    <string name="next_up">next: %1$s</string>
 </resources>
