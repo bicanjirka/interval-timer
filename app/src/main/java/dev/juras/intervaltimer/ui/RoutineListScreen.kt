@@ -1,5 +1,6 @@
 package dev.juras.intervaltimer.ui
 
+import android.os.SystemClock
 import androidx.activity.compose.BackHandler
 import androidx.compose.foundation.BorderStroke
 import androidx.compose.foundation.background
@@ -43,6 +44,7 @@ import androidx.compose.runtime.LaunchedEffect
 import androidx.compose.runtime.derivedStateOf
 import androidx.compose.runtime.getValue
 import androidx.compose.runtime.mutableFloatStateOf
+import androidx.compose.runtime.mutableLongStateOf
 import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.remember
 import androidx.compose.runtime.rememberUpdatedState
@@ -65,6 +67,7 @@ import dev.juras.intervaltimer.engine.Routine
 import dev.juras.intervaltimer.ui.theme.Danger
 
 private val CardGap = 12.dp
+private const val LONG_PRESS_TAP_MS = 400L
 
 /**
  * One tap starts a routine. A long press selects it, which swaps the top bar for edit / copy / delete
@@ -93,6 +96,8 @@ fun RoutineListScreen(
     var dragOrder by remember { mutableStateOf<List<Routine>?>(null) }
     var draggedId by remember { mutableStateOf<String?>(null) }
     var dragDelta by remember { mutableFloatStateOf(0f) }
+    // Lifting the finger after a long press also reaches the card's tap handler; that tap must not count.
+    var lastDragEndAt by remember { mutableLongStateOf(0L) }
     val gapPx = with(LocalDensity.current) { CardGap.toPx() }
 
     LaunchedEffect(routines) { if (draggedId == null) dragOrder = null }
@@ -105,6 +110,7 @@ fun RoutineListScreen(
         val order = dragOrder
         draggedId = null
         dragDelta = 0f
+        lastDragEndAt = SystemClock.uptimeMillis()
         if (order != null) {
             val ids = order.map { it.id }
             if (ids == latestStored.map { it.id }) dragOrder = null else onReorder(ids)
@@ -160,7 +166,9 @@ fun RoutineListScreen(
                     routine = routine,
                     selected = routine.id == selectedId,
                     onClick = {
+                        val endsLongPress = draggedId != null || SystemClock.uptimeMillis() - lastDragEndAt < LONG_PRESS_TAP_MS
                         when {
+                            endsLongPress -> {}
                             selectedId == null -> onStart(routine)
                             selectedId == routine.id -> selectedId = null
                             else -> selectedId = routine.id

@@ -16,7 +16,7 @@
 - Stop: pauses, the snackbar sits above the buttons, "Undo stop" resumes on the same second (log: `stop undone`, next phase came exactly the paused time later); doing nothing ends after 3 s and returns to the list.
 - New routine left unchanged is not saved; changed and unnamed it is listed by its shape ("9 × 105 s work / 20 s rest"). Editor steppers: tap steps, holding repeats (40 to 105 s in 1.5 s).
 - Running screen: one-digit and two-digit seconds fit, `#1/10` top right. Bugs found and fixed here: a single digit overflowed into the buttons; the snackbar used the baseline purple.
-- Not yet seen on the phone: the done screen with statistics, `m:ss` from 100 s on the device, a still (non-moving) long-press by a finger (adb could only send long-press with a few pixels of movement), Stop from the notification.
+- Not yet seen on the phone: the done screen with statistics, `m:ss` from 100 s on the device, a still (non-moving) long-press by a finger (adb could only send long-press with a few pixels of movement), Stop from the notification. (A still long-press was fixed and checked: the tap that ends it no longer clears the selection.)
 
 ## Still to check by ear, feel and hand (adb can't tell)
 - **Sound is audible** with the screen off, at the app's own volume; spoken phase names are clear; ducking dips other audio and it returns, and with ducking off it doesn't dip.
