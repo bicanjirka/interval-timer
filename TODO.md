@@ -11,15 +11,12 @@
 - Editor on the phone: typing works with the numeric keyboard, the total updates live, leaving saves.
 - Bugs found on the phone and fixed: the first cue of a routine used default settings (a beep even in vibration-only mode) because settings loaded asynchronously; the on-screen keyboard covered the field being edited.
 
-## Written on 2026-09-29 but not yet run on the phone (the phone was unreachable over adb)
-Unit tests and JVM screenshots pass; these need one pass on the Pixel:
-- **List:** long-press selects a card (haptic, white border, top bar shows edit / copy / delete); dragging it moves it and the order survives leaving the app; tap while selected only moves/clears the selection; back clears the selection. `detectDragGesturesAfterLongPress` next to `clickable` is the part most likely to misbehave.
-- **Undo stop:** Stop pauses, the snackbar at the top says "Routine stopped / Undo stop"; Undo continues at the same second (and stays paused if it was paused before); doing nothing ends after 3 s and returns to the list. Stop from the notification does the same.
-- **Undo delete:** delete from the selection bar, "Undo delete" puts it back in the same place.
-- **New routine** left unchanged is not added; a new routine has no name and shows as e.g. "8 × 40 s work / 20 s rest".
-- **Editor:** `+`/`−` step (5 s, rounds by 1), hold repeats, typing still works and the keyboard doesn't cover the row.
-- **Running screen:** digits fill the width with the condensed face on the real device (measured, so should not clip), 100 s and up shows `m:ss`.
-- **Done screen** shows per-round work and rest times.
+## Verified on the Pixel 10 on 2026-09-29 (second pass, over adb, vibration-only so it made no sound)
+- List: long-press selects (top bar with edit / copy / delete), dragging reorders and the order survives a restart, copy lands below the original, delete shows "Undo delete" and undo puts it back in the same place (the undo has to be tapped within 3 s).
+- Stop: pauses, the snackbar sits above the buttons, "Undo stop" resumes on the same second (log: `stop undone`, next phase came exactly the paused time later); doing nothing ends after 3 s and returns to the list.
+- New routine left unchanged is not saved; changed and unnamed it is listed by its shape ("9 × 105 s work / 20 s rest"). Editor steppers: tap steps, holding repeats (40 to 105 s in 1.5 s).
+- Running screen: one-digit and two-digit seconds fit, `#1/10` top right. Bugs found and fixed here: a single digit overflowed into the buttons; the snackbar used the baseline purple.
+- Not yet seen on the phone: the done screen with statistics, `m:ss` from 100 s on the device, a still (non-moving) long-press by a finger (adb could only send long-press with a few pixels of movement), Stop from the notification.
 
 ## Still to check by ear, feel and hand (adb can't tell)
 - **Sound is audible** with the screen off, at the app's own volume; spoken phase names are clear; ducking dips other audio and it returns, and with ducking off it doesn't dip.

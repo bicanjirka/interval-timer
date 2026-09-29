@@ -1,9 +1,9 @@
 package dev.juras.intervaltimer.ui
 
+import androidx.compose.foundation.Canvas
 import androidx.compose.foundation.background
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Box
-import androidx.compose.foundation.layout.BoxWithConstraints
 import androidx.compose.foundation.layout.Column
 import androidx.compose.foundation.layout.Row
 import androidx.compose.foundation.layout.fillMaxSize
@@ -21,20 +21,23 @@ import androidx.compose.material3.SnackbarHostState
 import androidx.compose.material3.Text
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.DisposableEffect
+import androidx.compose.runtime.remember
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
+import androidx.compose.ui.geometry.Offset
 import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.platform.LocalDensity
 import androidx.compose.ui.platform.LocalView
+import androidx.compose.ui.semantics.contentDescription
+import androidx.compose.ui.semantics.semantics
 import androidx.compose.ui.text.PlatformTextStyle
 import androidx.compose.ui.text.TextStyle
 import androidx.compose.ui.text.font.DeviceFontFamilyName
 import androidx.compose.ui.text.font.Font
 import androidx.compose.ui.text.font.FontFamily
 import androidx.compose.ui.text.rememberTextMeasurer
+import androidx.compose.ui.text.drawText
 import androidx.compose.ui.text.font.FontWeight
-import androidx.compose.ui.text.style.LineHeightStyle
-import androidx.compose.ui.text.style.TextAlign
 import androidx.compose.ui.text.style.TextOverflow
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
@@ -51,6 +54,9 @@ private val ButtonColors @Composable get() = ButtonDefaults.buttonColors(
     containerColor = Color.Black.copy(alpha = 0.4f),
     contentColor = Color.White,
 )
+/** Heights of the button area (see [Controls]): three buttons in a row, or DONE above two buttons. */
+private const val CONTROLS_DP = 96
+private const val MANUAL_CONTROLS_DP = 140 + 12 + 96
 private val Soft = Color.White.copy(alpha = 0.85f)
 
 /** Full-screen countdown in the colour of the current phase; when the routine is finished, what it took. */
@@ -81,8 +87,12 @@ fun RunningScreen(
                 Controls(state.segment?.manual == true, state.status == Status.PAUSED, onPause, onResume, onSkip, onStop)
             }
         }
-        // At the top: the bottom is where the thumb and the big buttons are.
-        SnackbarHost(snackbarHostState, Modifier.align(Alignment.TopCenter).safeDrawingPadding().padding(8.dp))
+        // Right above the buttons, so after an accidental Stop the undo is next to where the thumb just was.
+        val controlsHeight = if (state.segment?.manual == true) MANUAL_CONTROLS_DP.dp else CONTROLS_DP.dp
+        SnackbarHost(
+            snackbarHostState,
+            Modifier.align(Alignment.BottomCenter).safeDrawingPadding().padding(horizontal = 4.dp).padding(bottom = controlsHeight + 16.dp),
+        )
     }
 }
 
@@ -130,42 +140,41 @@ private fun RunningBody(modifier: Modifier, state: TimerState) {
 }
 
 /**
- * Digits sized to fill the space left, whatever the length of the text: the text is measured at a
- * reference size and scaled to the width (or height) available. A condensed face lets the digits grow
- * taller, tabular figures keep the width steady while the numbers change, and the line box is trimmed
- * to the glyphs so no room is wasted.
+ * Digits sized to fill the space left, whatever the length of the text, and drawn centred on the real
+ * outline of the digits (not on the font's line box, which sits off-centre and let a single digit run
+ * out of its space). The text is measured at a reference size and scaled: the width uses the advance
+ * width, the height the outline of all ten digits, so the size doesn't jump from one number to the
+ * next. A condensed face lets the digits grow taller, tabular figures keep the width steady.
  */
 @Composable
 private fun BigDigits(text: String, modifier: Modifier) {
     val measurer = rememberTextMeasurer()
-    BoxWithConstraints(modifier = modifier.fillMaxWidth(), contentAlignment = Alignment.Center) {
-        val density = LocalDensity.current
-        val base = TextStyle(
-            fontFamily = DigitFont,
-            fontWeight = FontWeight.Bold,
-            fontFeatureSettings = "tnum",
-            platformStyle = PlatformTextStyle(includeFontPadding = false),
-            lineHeightStyle = LineHeightStyle(LineHeightStyle.Alignment.Center, LineHeightStyle.Trim.Both),
-        )
-        val referencePx = 200f
-        val referenceWidth = measurer.measure(
-            text,
-            base.copy(fontSize = with(density) { referencePx.toSp() }),
-            maxLines = 1,
-            softWrap = false,
-        ).size.width
-        val sizePx = minOf(constraints.maxWidth * referencePx / referenceWidth, constraints.maxHeight / 0.75f)
-        val size = with(density) { sizePx.toSp() }
-        Text(
-            text,
-            style = base.copy(fontSize = size, lineHeight = size * 0.8f),
+    val density = LocalDensity.current
+    val base = TextStyle(
+        fontFamily = DigitFont,
+        fontWeight = FontWeight.Bold,
+        fontFeatureSettings = "tnum",
+        platformStyle = PlatformTextStyle(includeFontPadding = false),
+    )
+    fun measure(value: String, sizePx: Float) =
+        measurer.measure(value, base.copy(fontSize = with(density) { sizePx.toSp() }), maxLines = 1, softWrap = false)
+
+    val digitsInk = remember(measurer, density) {
+        measure("0123456789", REFERENCE_PX).getPathForRange(0, 10).getBounds()
+    }
+    Canvas(modifier = modifier.fillMaxWidth().semantics { contentDescription = text }) {
+        val referenceWidth = measure(text, REFERENCE_PX).size.width
+        val scale = minOf(size.width / referenceWidth, size.height / digitsInk.height)
+        val layout = measure(text, REFERENCE_PX * scale)
+        drawText(
+            layout,
             color = Color.White,
-            maxLines = 1,
-            softWrap = false,
-            textAlign = TextAlign.Center,
+            topLeft = Offset((size.width - layout.size.width) / 2, size.height / 2 - digitsInk.center.y * scale),
         )
     }
 }
+
+private const val REFERENCE_PX = 200f
 
 private val DigitFont = FontFamily(Font(DeviceFontFamilyName("sans-serif-condensed"), FontWeight.Bold))
 

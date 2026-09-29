@@ -24,6 +24,10 @@ private val ColorScheme = darkColorScheme(
     onSurface = Color.White,
     surfaceVariant = SurfaceRaised,
     onSurfaceVariant = Color.White,
+    // Snackbars: light on the dark and the coloured screens, with a green action, not the baseline purple.
+    inverseSurface = Color(0xFFEDEDED),
+    inverseOnSurface = Color.Black,
+    inversePrimary = BarGreen,
     error = Danger,
     onError = Color.Black,
 )
