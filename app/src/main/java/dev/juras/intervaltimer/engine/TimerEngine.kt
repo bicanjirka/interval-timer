@@ -9,7 +9,9 @@ enum class Status { READY, RUNNING, PAUSED, FINISHED }
 
 /**
  * A snapshot of the engine at one moment. [segment] and [next] are null when there is nothing
- * running / nothing after it.
+ * running / nothing after it. For a manual segment the time counts up ([segmentElapsedMs]) and
+ * [segmentRemainingMs] is 0; [openEnded] says the total left cannot be known because a manual
+ * segment is still to come (or running).
  */
 data class TimerState(
     val routineName: String,
@@ -18,22 +20,30 @@ data class TimerState(
     val next: Segment?,
     val segmentIndex: Int,
     val segmentCount: Int,
+    val segmentElapsedMs: Long,
     val segmentRemainingMs: Long,
     val totalRemainingMs: Long,
+    val openEnded: Boolean,
 ) {
     /** Whole seconds left in the segment, rounded up, so the display never shows 0 early. */
     val segmentSeconds: Int get() = ceilSeconds(segmentRemainingMs)
     val totalSeconds: Int get() = ceilSeconds(totalRemainingMs)
 
+    /** What the big digits show: seconds counting up for a manual segment, else counting down. */
+    val displaySeconds: Int
+        get() = if (segment?.manual == true) (segmentElapsedMs / 1000).toInt() else segmentSeconds
+
     private fun ceilSeconds(ms: Long) = ((ms + 999) / 1000).toInt()
 }
 
 /**
- * Runs a [Routine] against a clock. Position is always computed from elapsed time, so late polls,
- * pause/resume and skips cannot drift. Not thread-safe: call it from one thread.
+ * Runs a [Routine] against a clock. Position is computed from elapsed time, so late polls,
+ * pause/resume and skips cannot drift. A manual segment never ends by itself: [skip] is how the
+ * user says "done". Not thread-safe: call it from one thread.
  */
 class TimerEngine(private val routine: Routine, private val clock: MonotonicClock) {
-    private val timeline = Timeline.of(routine)
+    private val segments = Timeline.of(routine).segments
+    private var index = 0
     private var bankedMs = 0L
     private var runningSinceMs: Long? = null
     private var started = false
@@ -45,49 +55,65 @@ class TimerEngine(private val routine: Routine, private val clock: MonotonicCloc
     }
 
     fun pause() {
+        settle()
         val since = runningSinceMs ?: return
-        bankedMs = bankedMs + (clock.nowMs() - since)
+        bankedMs += clock.nowMs() - since
         runningSinceMs = null
     }
 
     fun resume() {
-        if (started && runningSinceMs == null && !isFinished()) runningSinceMs = clock.nowMs()
+        settle()
+        if (started && runningSinceMs == null && index < segments.size) runningSinceMs = clock.nowMs()
     }
 
-    /** Jumps to the start of the next segment; skipping the last one finishes the routine. */
+    /** Jumps to the start of the next segment; on a manual segment this is "done". */
     fun skip() {
-        if (!started || isFinished()) return
-        val index = timeline.indexAt(elapsedMs())
-        bankedMs = timeline.endMs(index)
+        settle()
+        if (!started || index >= segments.size) return
+        index++
+        bankedMs = 0
         if (runningSinceMs != null) runningSinceMs = clock.nowMs()
     }
 
     fun state(): TimerState {
-        val elapsed = elapsedMs()
-        val index = timeline.indexAt(elapsed)
-        val segments = timeline.segments
-        val finished = started && index >= segments.size
+        settle()
+        val current = segments.getOrNull(index)
+        val elapsed = elapsedInSegment()
+        val remaining = if (current == null || current.manual) 0L else current.durationMs - elapsed
+        val later = segments.drop(index + 1)
         return TimerState(
             routineName = routine.name,
             status = when {
                 !started -> Status.READY
-                finished -> Status.FINISHED
+                current == null -> Status.FINISHED
                 runningSinceMs == null -> Status.PAUSED
                 else -> Status.RUNNING
             },
-            segment = segments.getOrNull(index),
+            segment = current,
             next = segments.getOrNull(index + 1),
             segmentIndex = index,
             segmentCount = segments.size,
-            segmentRemainingMs = if (index < segments.size) timeline.endMs(index) - elapsed else 0,
-            totalRemainingMs = (timeline.totalMs - elapsed).coerceAtLeast(0),
+            segmentElapsedMs = if (current == null) 0 else elapsed,
+            segmentRemainingMs = remaining,
+            totalRemainingMs = remaining + later.sumOf { it.durationMs },
+            openEnded = current?.manual == true || later.any { it.manual },
         )
     }
 
-    private fun isFinished() = elapsedMs() >= timeline.totalMs
-
-    private fun elapsedMs(): Long {
-        val running = runningSinceMs?.let { clock.nowMs() - it } ?: 0L
-        return (bankedMs + running).coerceAtMost(timeline.totalMs)
+    /** Moves past every timed segment that has run out, carrying the overflow into the next. */
+    private fun settle() {
+        if (!started) return
+        val now = clock.nowMs()
+        var elapsed = elapsedInSegment()
+        while (index < segments.size) {
+            val s = segments[index]
+            if (s.manual || elapsed < s.durationMs) break
+            elapsed -= s.durationMs
+            index++
+        }
+        bankedMs = if (index < segments.size) elapsed else 0
+        if (runningSinceMs != null) runningSinceMs = if (index < segments.size) now else null
     }
+
+    private fun elapsedInSegment(): Long = bankedMs + (runningSinceMs?.let { clock.nowMs() - it } ?: 0L)
 }

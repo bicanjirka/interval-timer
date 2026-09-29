@@ -29,6 +29,13 @@ class RoutineSummaryTest {
     }
 
     @Test
+    fun workUntilDoneShowsSetsAndNoTimeLimit() {
+        val routine = Routine.untilDone("x", restSeconds = 90, sets = 5, getReadySeconds = 0)
+
+        assertEquals("5 × until done work / 90 s rest · no time limit", routine.summary())
+    }
+
+    @Test
     fun severalBlocksShowTheBlockCount() {
         val block = Block(phases = listOf(Phase.of(PhaseKind.WORK, 10)))
         val routine = Routine(name = "x", blocks = listOf(block, block))

@@ -15,8 +15,16 @@ import kotlinx.coroutines.flow.map
 
 private val Context.dataStore: DataStore<Preferences> by preferencesDataStore("interval_timer")
 
+/** How the timer signals a change of phase. */
+enum class CueMode(val sound: Boolean, val vibrate: Boolean) {
+    SOUND(sound = true, vibrate = false),
+    SOUND_AND_VIBRATION(sound = true, vibrate = true),
+    VIBRATION(sound = false, vibrate = true),
+}
+
 data class Settings(
     val volume: Float = 0.8f,
+    val mode: CueMode = CueMode.SOUND,
     val ducking: Boolean = true,
     val voice: Boolean = true,
     val keepScreenOn: Boolean = true,
@@ -29,6 +37,7 @@ class SettingsStore(context: Context) {
         val d = Settings()
         Settings(
             volume = it[VOLUME] ?: d.volume,
+            mode = it[MODE]?.let { name -> CueMode.entries.firstOrNull { m -> m.name == name } } ?: d.mode,
             ducking = it[DUCKING] ?: d.ducking,
             voice = it[VOICE] ?: d.voice,
             keepScreenOn = it[KEEP_SCREEN_ON] ?: d.keepScreenOn,
@@ -40,6 +49,7 @@ class SettingsStore(context: Context) {
     suspend fun update(settings: Settings) {
         store.edit {
             it[VOLUME] = settings.volume
+            it[MODE] = settings.mode.name
             it[DUCKING] = settings.ducking
             it[VOICE] = settings.voice
             it[KEEP_SCREEN_ON] = settings.keepScreenOn
@@ -48,6 +58,7 @@ class SettingsStore(context: Context) {
 
     private companion object {
         val VOLUME = floatPreferencesKey("volume")
+        val MODE = stringPreferencesKey("cue_mode")
         val DUCKING = booleanPreferencesKey("ducking")
         val VOICE = booleanPreferencesKey("voice")
         val KEEP_SCREEN_ON = booleanPreferencesKey("keep_screen_on")

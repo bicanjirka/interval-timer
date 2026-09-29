@@ -3,6 +3,7 @@ package dev.juras.intervaltimer.ui.theme
 import androidx.compose.ui.graphics.Color
 
 val Accent = Color(0xFF66BB6A)
+val BarGreen = Color(0xFF1B5E20)
 val Surface = Color(0xFF161616)
 val SurfaceRaised = Color(0xFF242424)
 

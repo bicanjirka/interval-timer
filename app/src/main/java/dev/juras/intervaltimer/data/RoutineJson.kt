@@ -20,8 +20,9 @@ object RoutineJson {
 /** What a fresh install starts with. The ids are fixed so an edit before the first save still matches. */
 object DefaultRoutines {
     fun all(): List<Routine> = listOf(
-        Routine.repeat("8 × 40 s / 20 s", workSeconds = 40, restSeconds = 20, rounds = 8).copy(id = "default-8x40-20"),
-        Routine.repeat("Tabata 8 × 20 s / 10 s", workSeconds = 20, restSeconds = 10, rounds = 8).copy(id = "default-tabata"),
-        Routine.timer("5 min timer", seconds = 300).copy(id = "default-5min"),
+        Routine.repeat("10 × 1 min", workSeconds = 60, restSeconds = 0, rounds = 10)
+            .copy(id = "default-10x1min", color = 0xFF1565C0),
+        Routine.untilDone("Work until done, rest 60 s", restSeconds = 60, sets = 10)
+            .copy(id = "default-until-done", color = 0xFF6A1B9A),
     )
 }

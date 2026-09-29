@@ -40,12 +40,12 @@ class TimerService : Service() {
     private val scope = CoroutineScope(SupervisorJob() + Dispatchers.Main)
     private var engine: TimerEngine? = null
     private var loop: Job? = null
-    private lateinit var cues: AudioCues
+    private lateinit var cues: CuePlayer
     private lateinit var wakeLock: PowerManager.WakeLock
 
     override fun onCreate() {
         super.onCreate()
-        cues = AudioCues(this)
+        cues = CuePlayer(this)
         wakeLock = getSystemService(PowerManager::class.java)
             .newWakeLock(PowerManager.PARTIAL_WAKE_LOCK, "intervaltimer:running")
         getSystemService(NotificationManager::class.java)
@@ -89,7 +89,7 @@ class TimerService : Service() {
         var tickedSecond = -1
         while (scope.isActive) {
             val state = timer.state()
-            val key = listOf(state.status, state.segmentIndex, state.segmentSeconds, state.totalSeconds)
+            val key = listOf(state.status, state.segmentIndex, state.displaySeconds, state.totalSeconds)
             if (key != published) {
                 published = key
                 mutableState.value = state
@@ -142,11 +142,10 @@ class TimerService : Service() {
     private fun notification(state: TimerState): Notification {
         val segment = state.segment
         val paused = state.status == Status.PAUSED
-        val title = segment?.let { "${it.name}  ${formatSeconds(state.segmentSeconds)}" } ?: state.routineName
+        val title = segment?.let { "${it.name}  ${formatSeconds(state.displaySeconds)}" } ?: state.routineName
         val text = buildString {
             append(state.routineName)
-            append(" · ")
-            append(getString(R.string.total_left, formatSeconds(state.totalSeconds)))
+            if (!state.openEnded) append(" · ").append(getString(R.string.total_left, formatSeconds(state.totalSeconds)))
             state.next?.let { append(" · ").append(getString(R.string.next_up, it.name)) }
         }
         val open = PendingIntent.getActivity(
@@ -165,7 +164,7 @@ class TimerService : Service() {
             .setVisibility(Notification.VISIBILITY_PUBLIC)
             .setForegroundServiceBehavior(Notification.FOREGROUND_SERVICE_IMMEDIATE)
             .addAction(action(if (paused) ACTION_RESUME else ACTION_PAUSE, if (paused) R.string.resume else R.string.pause))
-            .addAction(action(ACTION_SKIP, R.string.skip))
+            .addAction(action(ACTION_SKIP, if (segment?.manual == true) R.string.done else R.string.skip))
             .addAction(action(ACTION_STOP, R.string.stop))
             .build()
     }

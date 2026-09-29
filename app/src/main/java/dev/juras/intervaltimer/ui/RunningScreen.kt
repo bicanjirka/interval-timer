@@ -67,7 +67,7 @@ fun RunningScreen(
             DoneBody(Modifier.weight(1f), onClose)
         } else {
             RunningBody(Modifier.weight(1f), state)
-            Controls(state.status == Status.PAUSED, onPause, onResume, onSkip, onStop)
+            Controls(state.segment?.manual == true, state.status == Status.PAUSED, onPause, onResume, onSkip, onStop)
         }
     }
 }
@@ -82,14 +82,18 @@ private fun RunningBody(modifier: Modifier, state: TimerState) {
             color = Color.White,
             textAlign = TextAlign.Center,
         )
-        BigDigits(formatSeconds(state.segmentSeconds), Modifier.weight(1f))
+        if (state.segment?.manual == true) {
+            Text("Take your time, press Done when finished", fontSize = 18.sp, color = Color.White.copy(alpha = 0.85f))
+        }
+        BigDigits(formatSeconds(state.displaySeconds), Modifier.weight(1f))
         Text(
-            state.next?.let { "Next: ${it.name} ${formatSeconds((it.durationMs / 1000).toInt())}" } ?: "Last one",
+            state.next?.let { "Next: ${it.name} ${if (it.manual) "(until done)" else formatSeconds((it.durationMs / 1000).toInt())}" }
+                ?: "Last one",
             fontSize = 28.sp,
             color = Color.White,
         )
         Text(
-            "Total left ${formatSeconds(state.totalSeconds)}",
+            if (state.openEnded) " " else "Total left ${formatSeconds(state.totalSeconds)}",
             fontSize = 22.sp,
             color = Color.White.copy(alpha = 0.85f),
             modifier = Modifier.padding(top = 8.dp, bottom = 16.dp),
@@ -116,12 +120,33 @@ private fun BigDigits(text: String, modifier: Modifier) {
 }
 
 @Composable
-private fun Controls(paused: Boolean, onPause: () -> Unit, onResume: () -> Unit, onSkip: () -> Unit, onStop: () -> Unit) {
+private fun Controls(
+    manual: Boolean,
+    paused: Boolean,
+    onPause: () -> Unit,
+    onResume: () -> Unit,
+    onSkip: () -> Unit,
+    onStop: () -> Unit,
+) {
     var confirmStop by remember { mutableStateOf(false) }
-    Row(modifier = Modifier.fillMaxWidth(), horizontalArrangement = Arrangement.spacedBy(12.dp)) {
-        ControlButton(if (paused) "Resume" else "Pause", Modifier.weight(1.4f), if (paused) onResume else onPause)
-        ControlButton("Skip", Modifier.weight(1f), onSkip)
-        ControlButton("Stop", Modifier.weight(1f)) { confirmStop = true }
+    val pauseOrResume = if (paused) "Resume" else "Pause"
+    if (manual) {
+        // One huge target for the thing you do at the end of every set.
+        Button(
+            onClick = onSkip,
+            modifier = Modifier.fillMaxWidth().height(140.dp),
+            colors = ButtonDefaults.buttonColors(containerColor = Color.White, contentColor = Color.Black),
+        ) { Text("DONE", fontSize = 48.sp, fontWeight = FontWeight.Bold) }
+        Row(modifier = Modifier.fillMaxWidth().padding(top = 12.dp), horizontalArrangement = Arrangement.spacedBy(12.dp)) {
+            ControlButton(pauseOrResume, Modifier.weight(1f), if (paused) onResume else onPause)
+            ControlButton("Stop", Modifier.weight(1f)) { confirmStop = true }
+        }
+    } else {
+        Row(modifier = Modifier.fillMaxWidth(), horizontalArrangement = Arrangement.spacedBy(12.dp)) {
+            ControlButton(pauseOrResume, Modifier.weight(1.4f), if (paused) onResume else onPause)
+            ControlButton("Skip", Modifier.weight(1f), onSkip)
+            ControlButton("Stop", Modifier.weight(1f)) { confirmStop = true }
+        }
     }
     if (confirmStop) {
         AlertDialog(

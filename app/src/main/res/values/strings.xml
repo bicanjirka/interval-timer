@@ -4,6 +4,7 @@
     <string name="pause">Pause</string>
     <string name="resume">Resume</string>
     <string name="skip">Skip</string>
+    <string name="done">Done</string>
     <string name="stop">Stop</string>
     <string name="done_spoken">Done</string>
     <string name="total_left">%1$s left</string>

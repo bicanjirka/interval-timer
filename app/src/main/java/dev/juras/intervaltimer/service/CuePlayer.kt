@@ -9,6 +9,9 @@ import android.media.AudioTrack
 import android.os.Bundle
 import android.os.Handler
 import android.os.Looper
+import android.os.VibrationAttributes
+import android.os.VibrationEffect
+import android.os.VibratorManager
 import android.speech.tts.TextToSpeech
 import android.speech.tts.UtteranceProgressListener
 import dev.juras.intervaltimer.data.Settings
@@ -38,12 +41,15 @@ enum class Cue(vararg val notes: Pair<Int, Int>) {
 }
 
 /**
- * Plays beeps and speaks phase names at the app's own volume. With ducking on, other audio dips
- * (audio focus with GAIN_TRANSIENT_MAY_DUCK) only while a cue is sounding. Main thread only.
+ * Signals cues by beep, speech and/or vibration, depending on [Settings.mode]. Sound plays at the
+ * app's own volume; with ducking on, other audio dips (audio focus with GAIN_TRANSIENT_MAY_DUCK)
+ * only while a cue is sounding. Vibration-only mode makes no sound and takes no audio focus.
+ * Main thread only.
  */
-class AudioCues(context: Context) {
+class CuePlayer(context: Context) {
     private val appContext = context.applicationContext
     private val audioManager = appContext.getSystemService(AudioManager::class.java)
+    private val vibrator = appContext.getSystemService(VibratorManager::class.java).defaultVibrator
     private val handler = Handler(Looper.getMainLooper())
     private val attributes = AudioAttributes.Builder()
         .setUsage(AudioAttributes.USAGE_MEDIA)
@@ -77,6 +83,28 @@ class AudioCues(context: Context) {
     }
 
     fun play(cue: Cue) {
+        if (settings.mode.vibrate) vibrate(cue)
+        if (settings.mode.sound) beep(cue)
+    }
+
+    /** Pulses follow the cue's notes; gaps are stretched so they can be felt. */
+    private fun vibrate(cue: Cue) {
+        val timings = mutableListOf(0L) // a waveform alternates off, on, off, on, ...
+        var lastWasPulse = false
+        for ((hz, ms) in cue.notes) {
+            val pulse = hz > 0
+            if (!pulse && timings.size == 1) continue
+            if (pulse && lastWasPulse) timings += MIN_VIBRATION_GAP_MS.toLong()
+            timings += if (pulse) ms.toLong() else maxOf(ms, MIN_VIBRATION_GAP_MS).toLong()
+            lastWasPulse = pulse
+        }
+        vibrator.vibrate(
+            VibrationEffect.createWaveform(timings.toLongArray(), -1),
+            VibrationAttributes.createForUsage(VibrationAttributes.USAGE_ALARM),
+        )
+    }
+
+    private fun beep(cue: Cue) {
         val pcm = render(cue)
         val track = AudioTrack.Builder()
             .setAudioAttributes(attributes)
@@ -102,7 +130,7 @@ class AudioCues(context: Context) {
 
     /** Reads [text] aloud after [delayMs] (so a start beep is not talked over). */
     fun speak(text: String, delayMs: Long = 0) {
-        if (!settings.voice) return
+        if (!settings.voice || !settings.mode.sound) return
         handler.postDelayed({
             if (!ttsReady) return@postDelayed
             val id = "u${utterance++}"
@@ -163,5 +191,6 @@ class AudioCues(context: Context) {
         const val RAMP_MS = 8
         const val AMPLITUDE = 0.9
         const val TAIL_MS = 150L
+        const val MIN_VIBRATION_GAP_MS = 90
     }
 }

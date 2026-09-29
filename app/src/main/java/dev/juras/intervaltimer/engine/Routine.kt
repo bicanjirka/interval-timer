@@ -14,6 +14,9 @@ enum class PhaseKind(val defaultName: String, val defaultColor: Long) {
 /**
  * One timed step. [deltaSeconds] is added for every round after the first (never going below
  * [minSeconds]); [spoken] is read aloud at the start and defaults to [name].
+ *
+ * A [manual] phase has no length: it counts up, for information only, until the user says
+ * they are done, and then the routine moves on. [seconds] is ignored for it.
  */
 @Serializable
 data class Phase(
@@ -24,12 +27,20 @@ data class Phase(
     val deltaSeconds: Int = 0,
     val minSeconds: Int = 1,
     val spoken: String? = null,
+    val manual: Boolean = false,
 ) {
-    fun secondsInRound(round: Int): Int =
-        if (deltaSeconds == 0) seconds else maxOf(minSeconds, seconds + deltaSeconds * (round - 1))
+    fun secondsInRound(round: Int): Int = when {
+        manual -> 0
+        deltaSeconds == 0 -> seconds
+        else -> maxOf(minSeconds, seconds + deltaSeconds * (round - 1))
+    }
 
     companion object {
         fun of(kind: PhaseKind, seconds: Int) = Phase(kind.defaultName, seconds, kind)
+
+        /** Work of unknown length, ended by the user. */
+        fun untilDone(name: String = PhaseKind.WORK.defaultName) =
+            Phase(name, seconds = 0, kind = PhaseKind.WORK, manual = true)
     }
 }
 
@@ -50,6 +61,10 @@ data class Routine(
     val blocks: List<Block>,
     val coolDown: Phase? = null,
 ) {
+    /** True when some phase lasts until the user ends it, so the total time can't be known. */
+    val isOpenEnded: Boolean
+        get() = listOfNotNull(warmUp, coolDown).any { it.manual } || blocks.any { b -> b.phases.any { it.manual } }
+
     companion object {
         /** The common shape: [rounds] times work then rest. No rest when [restSeconds] is 0. */
         fun repeat(
@@ -73,5 +88,13 @@ data class Routine(
         /** A plain countdown. */
         fun timer(name: String, seconds: Int, getReadySeconds: Int = 5): Routine =
             repeat(name, seconds, restSeconds = 0, rounds = 1, getReadySeconds = getReadySeconds)
+
+        /** Work as long as it takes (shown counting up), then a fixed rest, for [sets] sets. */
+        fun untilDone(name: String, restSeconds: Int, sets: Int, getReadySeconds: Int = 5): Routine =
+            Routine(
+                name = name,
+                warmUp = getReadySeconds.takeIf { it > 0 }?.let { Phase.of(PhaseKind.WARM_UP, it) },
+                blocks = listOf(Block(sets, listOf(Phase.untilDone(), Phase.of(PhaseKind.REST, restSeconds)))),
+            )
     }
 }

@@ -3,6 +3,7 @@ package dev.juras.intervaltimer.engine
 /**
  * One stretch of a running routine, with its length already resolved (deltas applied).
  * [rounds] is 0 for steps that belong to no round (warm-up, cool-down, rest between blocks).
+ * A [manual] segment has no length (durationMs is 0): it lasts until the user ends it.
  */
 data class Segment(
     val name: String,
@@ -14,24 +15,13 @@ data class Segment(
     val blocks: Int = 1,
     val round: Int = 0,
     val rounds: Int = 0,
+    val manual: Boolean = false,
 )
 
-/** A routine flattened into consecutive [segments]; [startsMs] holds where each one begins. */
+/** A routine flattened into consecutive [segments]. */
 class Timeline(val segments: List<Segment>) {
-    val startsMs: LongArray = LongArray(segments.size).also { starts ->
-        var at = 0L
-        segments.forEachIndexed { i, s -> starts[i] = at; at += s.durationMs }
-    }
+    /** Total length of the timed segments; manual ones add nothing. */
     val totalMs: Long = segments.sumOf { it.durationMs }
-
-    /** Index of the segment running at [elapsedMs], or [segments].size once everything is done. */
-    fun indexAt(elapsedMs: Long): Int {
-        if (elapsedMs >= totalMs) return segments.size
-        val i = startsMs.indexOfLast { it <= elapsedMs }
-        return i.coerceAtLeast(0)
-    }
-
-    fun endMs(index: Int): Long = startsMs[index] + segments[index].durationMs
 
     companion object {
         /**
@@ -57,7 +47,7 @@ class Timeline(val segments: List<Segment>) {
                 }
                 routine.coolDown?.let { add(segment(it, 1, blockCount)) }
             }
-            return Timeline(segments.filter { it.durationMs > 0 })
+            return Timeline(segments.filter { it.durationMs > 0 || it.manual })
         }
 
         /** [block] and [rounds] stay 0 for steps outside any round. */
@@ -71,6 +61,7 @@ class Timeline(val segments: List<Segment>) {
             blocks = blocks,
             round = if (rounds > 0) round else 0,
             rounds = rounds,
+            manual = phase.manual,
         )
     }
 }

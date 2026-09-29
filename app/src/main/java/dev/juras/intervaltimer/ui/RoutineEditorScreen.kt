@@ -4,6 +4,7 @@ import androidx.activity.compose.BackHandler
 import androidx.compose.foundation.background
 import androidx.compose.foundation.clickable
 import androidx.compose.foundation.layout.Arrangement
+import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.Column
 import androidx.compose.foundation.layout.PaddingValues
 import androidx.compose.foundation.layout.Row
@@ -14,8 +15,8 @@ import androidx.compose.foundation.layout.size
 import androidx.compose.foundation.lazy.LazyColumn
 import androidx.compose.foundation.lazy.itemsIndexed
 import androidx.compose.foundation.shape.CircleShape
+import androidx.compose.foundation.text.KeyboardOptions
 import androidx.compose.material3.AlertDialog
-import androidx.compose.material3.Button
 import androidx.compose.material3.Card
 import androidx.compose.material3.CardDefaults
 import androidx.compose.material3.ExperimentalMaterial3Api
@@ -23,6 +24,7 @@ import androidx.compose.material3.IconButton
 import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.OutlinedButton
 import androidx.compose.material3.OutlinedTextField
+import androidx.compose.material3.OutlinedTextFieldDefaults
 import androidx.compose.material3.Scaffold
 import androidx.compose.material3.Switch
 import androidx.compose.material3.Text
@@ -48,6 +50,9 @@ import dev.juras.intervaltimer.engine.Timeline
 import dev.juras.intervaltimer.engine.formatSeconds
 import dev.juras.intervaltimer.ui.theme.PhasePalette
 
+private val Danger = Color(0xFFFF8A80)
+private const val NEUTRAL = 0xFF424242
+
 /** Edits [routine] in place through [onChange]; leaving the screen saves it. */
 @OptIn(ExperimentalMaterial3Api::class)
 @Composable
@@ -60,11 +65,13 @@ fun RoutineEditorScreen(
 ) {
     BackHandler(onBack = onDone)
     var confirmDelete by remember { mutableStateOf(false) }
+    var pickingColor by remember { mutableStateOf(false) }
     Scaffold(
         topBar = {
             TopAppBar(
                 title = { Text("Edit routine") },
-                navigationIcon = { TextButton(onClick = onDone) { Text("‹ Save", fontSize = 16.sp) } },
+                navigationIcon = { TextButton(onClick = onDone) { Text("‹ Save", fontSize = 16.sp, color = Color.White) } },
+                colors = barColors(),
             )
         },
     ) { padding ->
@@ -74,16 +81,20 @@ fun RoutineEditorScreen(
             verticalArrangement = Arrangement.spacedBy(12.dp),
         ) {
             item {
-                OutlinedTextField(
-                    value = routine.name,
-                    onValueChange = { onChange(routine.copy(name = it)) },
-                    label = { Text("Name") },
-                    singleLine = true,
-                    modifier = Modifier.fillMaxWidth(),
-                )
+                Row(verticalAlignment = Alignment.CenterVertically) {
+                    ColorDot(routine.color) { pickingColor = true }
+                    OutlinedTextField(
+                        value = routine.name,
+                        onValueChange = { onChange(routine.copy(name = it)) },
+                        label = { Text("Name") },
+                        singleLine = true,
+                        modifier = Modifier.weight(1f).padding(start = 12.dp),
+                    )
+                }
             }
             item {
-                Text("Total ${formatSeconds((Timeline.of(routine).totalMs / 1000).toInt())}", fontSize = 16.sp)
+                val timed = formatSeconds((Timeline.of(routine).totalMs / 1000).toInt())
+                Text(if (routine.isOpenEnded) "Total $timed plus however long your work takes" else "Total $timed", fontSize = 16.sp)
             }
             item {
                 OptionalPhase("Get ready first", routine.warmUp, PhaseKind.WARM_UP, 10) { onChange(routine.copy(warmUp = it)) }
@@ -109,9 +120,12 @@ fun RoutineEditorScreen(
                 OptionalPhase("Cool down at the end", routine.coolDown, PhaseKind.COOL_DOWN, 60) { onChange(routine.copy(coolDown = it)) }
             }
             if (canDelete) {
-                item { TextButton(onClick = { confirmDelete = true }) { Text("Delete routine", color = Color(0xFFEF5350)) } }
+                item { TextButton(onClick = { confirmDelete = true }) { Text("Delete routine", color = Danger) } }
             }
         }
+    }
+    if (pickingColor) {
+        ColorPickerDialog(onPick = { onChange(routine.copy(color = it)); pickingColor = false }, onDismiss = { pickingColor = false })
     }
     if (confirmDelete) {
         AlertDialog(
@@ -125,9 +139,24 @@ fun RoutineEditorScreen(
 
 private fun newBlock() = Block(rounds = 8, phases = listOf(Phase.of(PhaseKind.WORK, 40), Phase.of(PhaseKind.REST, 20)))
 
+/** Text fields that sit on a coloured card: white text and outline. */
+@Composable
+private fun onColorFields() = OutlinedTextFieldDefaults.colors(
+    focusedTextColor = Color.White,
+    unfocusedTextColor = Color.White,
+    focusedBorderColor = Color.White,
+    unfocusedBorderColor = Color.White.copy(alpha = 0.5f),
+    focusedLabelColor = Color.White,
+    unfocusedLabelColor = Color.White.copy(alpha = 0.8f),
+    cursorColor = Color.White,
+)
+
 @Composable
 private fun OptionalPhase(label: String, phase: Phase?, kind: PhaseKind, defaultSeconds: Int, onChange: (Phase?) -> Unit) {
-    Card(modifier = Modifier.fillMaxWidth(), colors = CardDefaults.cardColors(containerColor = MaterialTheme.colorScheme.surfaceVariant)) {
+    Card(
+        modifier = Modifier.fillMaxWidth(),
+        colors = CardDefaults.cardColors(containerColor = Color(phase?.color ?: NEUTRAL), contentColor = Color.White),
+    ) {
         Row(modifier = Modifier.padding(12.dp), verticalAlignment = Alignment.CenterVertically) {
             Switch(checked = phase != null, onCheckedChange = { onChange(if (it) Phase.of(kind, defaultSeconds) else null) })
             Text(label, fontSize = 16.sp, modifier = Modifier.weight(1f).padding(start = 12.dp))
@@ -179,6 +208,7 @@ private fun BlockEditor(
 private fun nextPhase(phases: List<Phase>) =
     if (phases.lastOrNull()?.kind == PhaseKind.WORK) Phase.of(PhaseKind.REST, 20) else Phase.of(PhaseKind.WORK, 40)
 
+/** A phase card in the phase's own colour, so the editor already looks like the running screen. */
 @Composable
 private fun PhaseEditor(
     phase: Phase,
@@ -190,45 +220,40 @@ private fun PhaseEditor(
     onDelete: () -> Unit,
 ) {
     var pickingColor by remember { mutableStateOf(false) }
-    Card(colors = CardDefaults.cardColors(containerColor = MaterialTheme.colorScheme.surface)) {
+    Card(colors = CardDefaults.cardColors(containerColor = Color(phase.color), contentColor = Color.White)) {
         Column(modifier = Modifier.padding(8.dp), verticalArrangement = Arrangement.spacedBy(6.dp)) {
             Row(verticalAlignment = Alignment.CenterVertically) {
-                ColorDot(phase.color) { pickingColor = true }
+                ColorDot(phase.color, outlined = true) { pickingColor = true }
                 OutlinedTextField(
                     value = phase.name,
                     onValueChange = { onChange(phase.copy(name = it)) },
                     singleLine = true,
+                    colors = onColorFields(),
                     modifier = Modifier.weight(1f).padding(horizontal = 8.dp),
                 )
                 TextButton(onClick = { onChange(phase.withKind(if (phase.kind == PhaseKind.REST) PhaseKind.WORK else PhaseKind.REST)) }) {
-                    Text(if (phase.kind == PhaseKind.REST) "Rest" else "Work")
+                    Text(if (phase.kind == PhaseKind.REST) "Rest" else "Work", color = Color.White)
                 }
             }
-            Row(verticalAlignment = Alignment.CenterVertically, horizontalArrangement = Arrangement.spacedBy(8.dp)) {
-                NumberField("sec", phase.seconds, min = 1, modifier = Modifier.weight(1f)) { onChange(phase.copy(seconds = it)) }
-                NumberField("± sec/round", phase.deltaSeconds, min = -3600, modifier = Modifier.weight(1f), allowNegative = true) {
-                    onChange(phase.copy(deltaSeconds = it))
+            if (phase.kind == PhaseKind.WORK) {
+                Row(verticalAlignment = Alignment.CenterVertically) {
+                    Switch(checked = phase.manual, onCheckedChange = { onChange(phase.copy(manual = it)) })
+                    Text("Until I press Done (time counts up)", fontSize = 15.sp, modifier = Modifier.padding(start = 12.dp))
+                }
+            }
+            if (!phase.manual) {
+                Row(verticalAlignment = Alignment.CenterVertically, horizontalArrangement = Arrangement.spacedBy(8.dp)) {
+                    NumberField("sec", phase.seconds, min = 1, modifier = Modifier.weight(1f)) { onChange(phase.copy(seconds = it)) }
+                    NumberField("± sec/round", phase.deltaSeconds, min = -3600, modifier = Modifier.weight(1f), allowNegative = true) {
+                        onChange(phase.copy(deltaSeconds = it))
+                    }
                 }
             }
             RowActions(canMoveUp, canMoveDown, { onMove(-1) }, { onMove(1) }, onDuplicate, onDelete)
         }
     }
     if (pickingColor) {
-        AlertDialog(
-            onDismissRequest = { pickingColor = false },
-            confirmButton = {},
-            dismissButton = { TextButton(onClick = { pickingColor = false }) { Text("Cancel") } },
-            title = { Text("Colour") },
-            text = {
-                Column(verticalArrangement = Arrangement.spacedBy(12.dp)) {
-                    PhasePalette.chunked(4).forEach { row ->
-                        Row(horizontalArrangement = Arrangement.spacedBy(12.dp)) {
-                            row.forEach { color -> ColorDot(color) { onChange(phase.copy(color = color)); pickingColor = false } }
-                        }
-                    }
-                }
-            },
-        )
+        ColorPickerDialog(onPick = { onChange(phase.copy(color = it)); pickingColor = false }, onDismiss = { pickingColor = false })
     }
 }
 
@@ -240,11 +265,36 @@ private fun Phase.withKind(newKind: PhaseKind) = copy(
 )
 
 @Composable
-private fun ColorDot(color: Long, onClick: () -> Unit) {
-    Column(
-        modifier = Modifier.size(44.dp).clip(CircleShape).background(Color(color)).clickable(onClick = onClick),
-        content = {},
+private fun ColorPickerDialog(onPick: (Long) -> Unit, onDismiss: () -> Unit) {
+    AlertDialog(
+        onDismissRequest = onDismiss,
+        confirmButton = {},
+        dismissButton = { TextButton(onClick = onDismiss) { Text("Cancel") } },
+        title = { Text("Colour") },
+        text = {
+            Column(verticalArrangement = Arrangement.spacedBy(12.dp)) {
+                PhasePalette.chunked(4).forEach { row ->
+                    Row(horizontalArrangement = Arrangement.spacedBy(12.dp)) {
+                        row.forEach { color -> ColorDot(color) { onPick(color) } }
+                    }
+                }
+            }
+        },
     )
+}
+
+@Composable
+private fun ColorDot(color: Long, outlined: Boolean = false, onClick: () -> Unit) {
+    Box(
+        modifier = Modifier
+            .size(44.dp)
+            .clip(CircleShape)
+            .background(if (outlined) Color.White else Color(color))
+            .clickable(onClick = onClick),
+        contentAlignment = Alignment.Center,
+    ) {
+        if (outlined) Box(modifier = Modifier.size(34.dp).clip(CircleShape).background(Color(color)))
+    }
 }
 
 @Composable
@@ -260,7 +310,7 @@ private fun RowActions(
         IconButton(onClick = onUp, enabled = canMoveUp) { Text("▲", fontSize = 18.sp) }
         IconButton(onClick = onDown, enabled = canMoveDown) { Text("▼", fontSize = 18.sp) }
         IconButton(onClick = onDuplicate) { Text("⧉", fontSize = 20.sp) }
-        IconButton(onClick = onDelete) { Text("✕", fontSize = 18.sp, color = Color(0xFFEF5350)) }
+        IconButton(onClick = onDelete) { Text("✕", fontSize = 18.sp, color = Danger) }
     }
 }
 
@@ -284,9 +334,8 @@ private fun NumberField(
         },
         label = { Text(label) },
         singleLine = true,
-        keyboardOptions = androidx.compose.foundation.text.KeyboardOptions(
-            keyboardType = if (allowNegative) KeyboardType.Text else KeyboardType.Number,
-        ),
+        colors = onColorFields(),
+        keyboardOptions = KeyboardOptions(keyboardType = if (allowNegative) KeyboardType.Text else KeyboardType.Number),
         modifier = modifier,
     )
 }
