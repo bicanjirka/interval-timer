@@ -44,6 +44,7 @@ class TimerService : Service() {
     private var loop: Job? = null
     private lateinit var cues: CuePlayer
     private lateinit var wakeLock: PowerManager.WakeLock
+    private val settingsStore by lazy { SettingsStore(this) }
 
     override fun onCreate() {
         super.onCreate()
@@ -52,7 +53,7 @@ class TimerService : Service() {
             .newWakeLock(PowerManager.PARTIAL_WAKE_LOCK, "intervaltimer:running")
         getSystemService(NotificationManager::class.java)
             .createNotificationChannel(NotificationChannel(CHANNEL, getString(R.string.channel_name), NotificationManager.IMPORTANCE_LOW))
-        scope.launch { SettingsStore(this@TimerService).settings.collect { cues.apply(it) } }
+        scope.launch { settingsStore.settings.collect { cues.apply(it) } }
     }
 
     override fun onStartCommand(intent: Intent?, flags: Int, startId: Int): Int {
@@ -87,10 +88,15 @@ class TimerService : Service() {
         loop?.cancel()
         val timer = TimerEngine(routine) { SystemClock.elapsedRealtime() }
         engine = timer
-        timer.start()
-        AppLog.i(TAG, "routine '${routine.name}' started, ${timer.state().segmentCount} segments")
         startForeground(NOTIFICATION_ID, notification(timer.state()), ServiceInfo.FOREGROUND_SERVICE_TYPE_MEDIA_PLAYBACK)
-        loop = scope.launch { run(timer) }
+        loop = scope.launch {
+            // The saved cue mode must be in place before the first cue, or a silent-mode
+            // workout would open with a beep. The routine's clock starts only afterwards.
+            cues.apply(settingsStore.current())
+            timer.start()
+            AppLog.i(TAG, "routine '${routine.name}' started, ${timer.state().segmentCount} segments")
+            run(timer)
+        }
     }
 
     private suspend fun run(timer: TimerEngine) {
