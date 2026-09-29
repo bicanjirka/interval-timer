@@ -113,3 +113,23 @@ class ManualPhaseTest {
         assertEquals(listOf(routine), decoded)
     }
 }
+
+class WithManualTest {
+    @Test
+    fun turningUntilDoneOffGivesTheZeroLengthPhaseARealLength() {
+        val timed = Phase.untilDone().withManual(false)
+
+        assertEquals(false, timed.manual)
+        assertEquals(Phase.DEFAULT_SECONDS, timed.seconds)
+    }
+
+    @Test
+    fun turningItOffKeepsALengthTheUserAlreadySet() {
+        assertEquals(75, Phase.of(PhaseKind.WORK, 75).copy(manual = true).withManual(false).seconds)
+    }
+
+    @Test
+    fun turningItOnKeepsTheSeconds() {
+        assertEquals(true, Phase.of(PhaseKind.WORK, 30).withManual(true).manual)
+    }
+}

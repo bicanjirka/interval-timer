@@ -35,7 +35,12 @@ data class Phase(
         else -> maxOf(minSeconds, seconds + deltaSeconds * (round - 1))
     }
 
+    /** Switches between timed and until-done; a phase that becomes timed gets a real length instead of the 0 a manual one stores. */
+    fun withManual(on: Boolean) = copy(manual = on, seconds = if (!on && seconds < 1) DEFAULT_SECONDS else seconds)
+
     companion object {
+        const val DEFAULT_SECONDS = 40
+
         fun of(kind: PhaseKind, seconds: Int) = Phase(kind.defaultName, seconds, kind)
 
         /** Work of unknown length, ended by the user. */

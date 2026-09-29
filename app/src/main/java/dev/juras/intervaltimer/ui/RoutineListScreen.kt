@@ -62,6 +62,7 @@ import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
 import androidx.compose.ui.zIndex
 import dev.juras.intervaltimer.engine.Routine
+import dev.juras.intervaltimer.ui.theme.Danger
 
 private val CardGap = 12.dp
 
@@ -123,9 +124,12 @@ fun RoutineListScreen(
                     title = { Text(selected.title(), maxLines = 1, overflow = TextOverflow.Ellipsis) },
                     navigationIcon = { IconButton(onClick = { selectedId = null }) { Icon(Icons.Default.Close, "Clear selection") } },
                     actions = {
-                        IconButton(onClick = { onEdit(selected); selectedId = null }) { Icon(Icons.Default.Edit, "Edit") }
+                        // Delete (red) is the farthest from the edge, Edit the nearest.
+                        IconButton(onClick = { onDelete(selected); selectedId = null }) {
+                            Icon(Icons.Default.Delete, "Delete", tint = Danger)
+                        }
                         IconButton(onClick = { onDuplicate(selected); selectedId = null }) { Icon(Icons.Filled.ContentCopy, "Copy") }
-                        IconButton(onClick = { onDelete(selected); selectedId = null }) { Icon(Icons.Default.Delete, "Delete") }
+                        IconButton(onClick = { onEdit(selected); selectedId = null }) { Icon(Icons.Default.Edit, "Edit") }
                     },
                     colors = barColors(),
                 )

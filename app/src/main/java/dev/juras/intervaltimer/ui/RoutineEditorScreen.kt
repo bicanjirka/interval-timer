@@ -261,7 +261,7 @@ private fun PhaseEditor(
             }
             if (phase.kind == PhaseKind.WORK) {
                 Row(verticalAlignment = Alignment.CenterVertically) {
-                    Switch(checked = phase.manual, onCheckedChange = { onChange(phase.copy(manual = it)) })
+                    Switch(checked = phase.manual, onCheckedChange = { onChange(phase.withManual(it)) })
                     Text("Until I press Done (time counts up)", fontSize = 15.sp, modifier = Modifier.padding(start = 12.dp))
                 }
             }
