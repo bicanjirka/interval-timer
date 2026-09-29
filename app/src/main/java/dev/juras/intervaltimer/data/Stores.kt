@@ -1,0 +1,85 @@
+package dev.juras.intervaltimer.data
+
+import android.content.Context
+import androidx.datastore.core.DataStore
+import androidx.datastore.preferences.core.Preferences
+import androidx.datastore.preferences.core.booleanPreferencesKey
+import androidx.datastore.preferences.core.edit
+import androidx.datastore.preferences.core.floatPreferencesKey
+import androidx.datastore.preferences.core.stringPreferencesKey
+import androidx.datastore.preferences.preferencesDataStore
+import dev.juras.intervaltimer.engine.Routine
+import kotlinx.coroutines.flow.Flow
+import kotlinx.coroutines.flow.first
+import kotlinx.coroutines.flow.map
+
+private val Context.dataStore: DataStore<Preferences> by preferencesDataStore("interval_timer")
+
+data class Settings(
+    val volume: Float = 0.8f,
+    val ducking: Boolean = true,
+    val voice: Boolean = true,
+    val keepScreenOn: Boolean = true,
+)
+
+class SettingsStore(context: Context) {
+    private val store = context.applicationContext.dataStore
+
+    val settings: Flow<Settings> = store.data.map {
+        val d = Settings()
+        Settings(
+            volume = it[VOLUME] ?: d.volume,
+            ducking = it[DUCKING] ?: d.ducking,
+            voice = it[VOICE] ?: d.voice,
+            keepScreenOn = it[KEEP_SCREEN_ON] ?: d.keepScreenOn,
+        )
+    }
+
+    suspend fun current(): Settings = settings.first()
+
+    suspend fun update(settings: Settings) {
+        store.edit {
+            it[VOLUME] = settings.volume
+            it[DUCKING] = settings.ducking
+            it[VOICE] = settings.voice
+            it[KEEP_SCREEN_ON] = settings.keepScreenOn
+        }
+    }
+
+    private companion object {
+        val VOLUME = floatPreferencesKey("volume")
+        val DUCKING = booleanPreferencesKey("ducking")
+        val VOICE = booleanPreferencesKey("voice")
+        val KEEP_SCREEN_ON = booleanPreferencesKey("keep_screen_on")
+    }
+}
+
+/** All routines as one JSON document. A fresh install gets [DefaultRoutines]. */
+class RoutineStore(context: Context) {
+    private val store = context.applicationContext.dataStore
+
+    val routines: Flow<List<Routine>> = store.data.map { prefs ->
+        prefs[ROUTINES]?.let { runCatching { RoutineJson.decode(it) }.getOrNull() } ?: DefaultRoutines.all()
+    }
+
+    suspend fun get(id: String): Routine? = routines.first().firstOrNull { it.id == id }
+
+    /** Replaces the routine with the same id, or adds it at the end. */
+    suspend fun save(routine: Routine) = modify { list ->
+        if (list.any { it.id == routine.id }) list.map { if (it.id == routine.id) routine else it } else list + routine
+    }
+
+    suspend fun delete(id: String) = modify { list -> list.filterNot { it.id == id } }
+
+    private suspend fun modify(change: (List<Routine>) -> List<Routine>) {
+        store.edit { prefs ->
+            val current = prefs[ROUTINES]?.let { runCatching { RoutineJson.decode(it) }.getOrNull() }
+                ?: DefaultRoutines.all()
+            prefs[ROUTINES] = RoutineJson.encode(change(current))
+        }
+    }
+
+    private companion object {
+        val ROUTINES = stringPreferencesKey("routines")
+    }
+}
