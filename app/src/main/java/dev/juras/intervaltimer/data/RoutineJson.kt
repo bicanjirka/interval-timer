@@ -17,11 +17,11 @@ object RoutineJson {
     fun decode(text: String): List<Routine> = json.decodeFromString(serializer, text)
 }
 
-/** What a fresh install starts with. */
+/** What a fresh install starts with. The ids are fixed so an edit before the first save still matches. */
 object DefaultRoutines {
     fun all(): List<Routine> = listOf(
-        Routine.repeat("8 × 40 s / 20 s", workSeconds = 40, restSeconds = 20, rounds = 8),
-        Routine.repeat("Tabata 8 × 20 s / 10 s", workSeconds = 20, restSeconds = 10, rounds = 8),
-        Routine.timer("5 min timer", seconds = 300),
+        Routine.repeat("8 × 40 s / 20 s", workSeconds = 40, restSeconds = 20, rounds = 8).copy(id = "default-8x40-20"),
+        Routine.repeat("Tabata 8 × 20 s / 10 s", workSeconds = 20, restSeconds = 10, rounds = 8).copy(id = "default-tabata"),
+        Routine.timer("5 min timer", seconds = 300).copy(id = "default-5min"),
     )
 }

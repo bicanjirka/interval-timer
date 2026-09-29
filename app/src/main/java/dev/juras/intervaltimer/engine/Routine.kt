@@ -5,7 +5,7 @@ import java.util.UUID
 
 /** What a phase is for. Decides its default name and colour and the cue played when it starts. */
 enum class PhaseKind(val defaultName: String, val defaultColor: Long) {
-    WARM_UP("Get ready", 0xFFEF6C00),
+    WARM_UP("Get ready", 0xFFE65100),
     WORK("Work", 0xFF2E7D32),
     REST("Rest", 0xFFC62828),
     COOL_DOWN("Cool down", 0xFF1565C0),
