@@ -15,6 +15,7 @@ import android.os.VibratorManager
 import android.speech.tts.TextToSpeech
 import android.speech.tts.UtteranceProgressListener
 import dev.juras.intervaltimer.data.Settings
+import dev.juras.intervaltimer.log.AppLog
 import dev.juras.intervaltimer.engine.PhaseKind
 import kotlin.math.PI
 import kotlin.math.sin
@@ -65,9 +66,11 @@ class CuePlayer(context: Context) {
     private val tts: TextToSpeech = TextToSpeech(appContext) { status ->
         ttsReady = status == TextToSpeech.SUCCESS
         if (ttsReady) tts.setAudioAttributes(attributes)
+        AppLog.i(TAG, "text to speech ${if (ttsReady) "ready" else "failed to start (status $status)"}")
     }
 
     init {
+        AppLog.i(TAG, "created; vibrator present: ${vibrator.hasVibrator()}")
         tts.setOnUtteranceProgressListener(object : UtteranceProgressListener() {
             override fun onStart(utteranceId: String) = Unit
             override fun onDone(utteranceId: String) = finished(utteranceId)
@@ -79,12 +82,21 @@ class CuePlayer(context: Context) {
     }
 
     fun apply(settings: Settings) {
+        if (settings != this.settings) {
+            AppLog.i(TAG, "settings: mode ${settings.mode}, volume ${settings.volume}, ducking ${settings.ducking}, voice ${settings.voice}")
+        }
         this.settings = settings
     }
 
+    /** A cue that can't be played is logged, never allowed to stop the workout. */
     fun play(cue: Cue) {
-        if (settings.mode.vibrate) vibrate(cue)
-        if (settings.mode.sound) beep(cue)
+        AppLog.d(TAG, "cue $cue (${settings.mode})")
+        try {
+            if (settings.mode.vibrate) vibrate(cue)
+            if (settings.mode.sound) beep(cue)
+        } catch (e: Exception) {
+            AppLog.e(TAG, "cue $cue failed", e)
+        }
     }
 
     /** Pulses follow the cue's notes; gaps are stretched so they can be felt. */
@@ -132,12 +144,23 @@ class CuePlayer(context: Context) {
     fun speak(text: String, delayMs: Long = 0) {
         if (!settings.voice || !settings.mode.sound) return
         handler.postDelayed({
-            if (!ttsReady) return@postDelayed
-            val id = "u${utterance++}"
-            speaking += id
-            hold()
-            val params = Bundle().apply { putFloat(TextToSpeech.Engine.KEY_PARAM_VOLUME, settings.volume) }
-            if (tts.speak(text, TextToSpeech.QUEUE_FLUSH, params, id) != TextToSpeech.SUCCESS) finished(id)
+            if (!ttsReady) {
+                AppLog.w(TAG, "not speaking '$text': text to speech is not ready")
+                return@postDelayed
+            }
+            try {
+                val id = "u${utterance++}"
+                speaking += id
+                hold()
+                val params = Bundle().apply { putFloat(TextToSpeech.Engine.KEY_PARAM_VOLUME, settings.volume) }
+                val result = tts.speak(text, TextToSpeech.QUEUE_FLUSH, params, id)
+                if (result != TextToSpeech.SUCCESS) {
+                    AppLog.w(TAG, "speak '$text' returned $result")
+                    finished(id)
+                }
+            } catch (e: Exception) {
+                AppLog.e(TAG, "speaking '$text' failed", e)
+            }
         }, delayMs)
     }
 
@@ -159,7 +182,8 @@ class CuePlayer(context: Context) {
                 .setOnAudioFocusChangeListener { }
                 .build()
             focus = request
-            audioManager.requestAudioFocus(request)
+            val result = audioManager.requestAudioFocus(request)
+            if (result != AudioManager.AUDIOFOCUS_REQUEST_GRANTED) AppLog.w(TAG, "audio focus not granted (result $result)")
         }
     }
 
@@ -187,6 +211,7 @@ class CuePlayer(context: Context) {
     }
 
     private companion object {
+        const val TAG = "Cues"
         const val SAMPLE_RATE = 44_100
         const val RAMP_MS = 8
         const val AMPLITUDE = 0.9

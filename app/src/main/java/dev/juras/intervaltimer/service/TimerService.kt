@@ -21,6 +21,8 @@ import dev.juras.intervaltimer.engine.Status
 import dev.juras.intervaltimer.engine.TimerEngine
 import dev.juras.intervaltimer.engine.TimerState
 import dev.juras.intervaltimer.engine.formatSeconds
+import dev.juras.intervaltimer.log.AppLog
+import kotlinx.coroutines.CancellationException
 import kotlinx.coroutines.CoroutineScope
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.Job
@@ -54,12 +56,18 @@ class TimerService : Service() {
     }
 
     override fun onStartCommand(intent: Intent?, flags: Int, startId: Int): Int {
-        when (intent?.action) {
-            ACTION_START -> intent.getStringExtra(EXTRA_ROUTINE)?.let { begin(RoutineJson.decode(it).first()) }
-            ACTION_PAUSE -> engine?.pause()
-            ACTION_RESUME -> engine?.resume()
-            ACTION_SKIP -> engine?.skip()
-            ACTION_STOP -> end()
+        val action = intent?.action
+        AppLog.i(TAG, "command ${action?.substringAfterLast('.')} (engine ${if (engine == null) "absent" else "present"})")
+        try {
+            when (action) {
+                ACTION_START -> intent.getStringExtra(EXTRA_ROUTINE)?.let { begin(RoutineJson.decode(it).first()) }
+                ACTION_PAUSE -> engine?.pause()
+                ACTION_RESUME -> engine?.resume()
+                ACTION_SKIP -> engine?.skip()
+                ACTION_STOP -> end()
+            }
+        } catch (e: Exception) {
+            AppLog.e(TAG, "command $action failed", e)
         }
         if (engine == null) stopSelf()
         return START_NOT_STICKY
@@ -68,6 +76,7 @@ class TimerService : Service() {
     override fun onBind(intent: Intent?): IBinder? = null
 
     override fun onDestroy() {
+        AppLog.i(TAG, "destroyed (engine ${if (engine == null) "absent" else "still running"})")
         scope.cancel()
         cues.shutdown()
         if (wakeLock.isHeld) wakeLock.release()
@@ -79,44 +88,74 @@ class TimerService : Service() {
         val timer = TimerEngine(routine) { SystemClock.elapsedRealtime() }
         engine = timer
         timer.start()
+        AppLog.i(TAG, "routine '${routine.name}' started, ${timer.state().segmentCount} segments")
         startForeground(NOTIFICATION_ID, notification(timer.state()), ServiceInfo.FOREGROUND_SERVICE_TYPE_MEDIA_PLAYBACK)
         loop = scope.launch { run(timer) }
     }
 
     private suspend fun run(timer: TimerEngine) {
         var published: List<Any?>? = null
+        var lastStatus: Status? = null
+        var lastIndex = -1
         var cueIndex = -1
         var tickedSecond = -1
+        var lastTickAt = SystemClock.elapsedRealtime()
         while (scope.isActive) {
-            val state = timer.state()
-            val key = listOf(state.status, state.segmentIndex, state.displaySeconds, state.totalSeconds)
-            if (key != published) {
-                published = key
-                mutableState.value = state
-                getSystemService(NotificationManager::class.java).notify(NOTIFICATION_ID, notification(state))
+            val tickAt = SystemClock.elapsedRealtime()
+            if (tickAt - lastTickAt > STALL_LOG_MS) {
+                AppLog.w(TAG, "timer loop stalled for ${tickAt - lastTickAt} ms (cues may be late; screen off or Doze?)")
             }
-            keepAwake(state)
-            if (state.status == Status.FINISHED) {
-                finish()
-                return
-            }
-            val segment = state.segment
-            if (state.status == Status.RUNNING && segment != null) {
-                if (state.segmentIndex != cueIndex) {
-                    cueIndex = state.segmentIndex
-                    tickedSecond = -1
-                    cues.play(Cue.startOf(segment.kind))
-                    cues.speak(segment.spoken, delayMs = START_SPEECH_DELAY_MS)
-                } else if (segment.durationMs > 3000 && state.segmentSeconds in 1..3 && state.segmentSeconds != tickedSecond) {
-                    tickedSecond = state.segmentSeconds
-                    cues.play(Cue.TICK)
+            lastTickAt = tickAt
+            try {
+                val state = timer.state()
+                if (state.status != lastStatus) {
+                    AppLog.i(TAG, "status $lastStatus -> ${state.status}")
+                    lastStatus = state.status
                 }
+                if (state.segmentIndex != lastIndex) {
+                    lastIndex = state.segmentIndex
+                    AppLog.i(TAG, "segment ${state.segmentIndex + 1}/${state.segmentCount}: ${describe(state)}")
+                }
+                val key = listOf(state.status, state.segmentIndex, state.displaySeconds, state.totalSeconds)
+                if (key != published) {
+                    published = key
+                    mutableState.value = state
+                    getSystemService(NotificationManager::class.java).notify(NOTIFICATION_ID, notification(state))
+                }
+                keepAwake(state)
+                if (state.status == Status.FINISHED) {
+                    finish()
+                    return
+                }
+                val segment = state.segment
+                if (state.status == Status.RUNNING && segment != null) {
+                    if (state.segmentIndex != cueIndex) {
+                        cueIndex = state.segmentIndex
+                        tickedSecond = -1
+                        cues.play(Cue.startOf(segment.kind))
+                        cues.speak(segment.spoken, delayMs = START_SPEECH_DELAY_MS)
+                    } else if (segment.durationMs > 3000 && state.segmentSeconds in 1..3 && state.segmentSeconds != tickedSecond) {
+                        tickedSecond = state.segmentSeconds
+                        cues.play(Cue.TICK)
+                    }
+                }
+            } catch (e: CancellationException) {
+                throw e
+            } catch (e: Exception) {
+                AppLog.e(TAG, "tick failed; carrying on", e)
             }
             delay(POLL_MS)
         }
     }
 
+    private fun describe(state: TimerState): String {
+        val s = state.segment ?: return "none"
+        val length = if (s.manual) "until done" else "${s.durationMs / 1000} s"
+        return "'${s.name}' $length, round ${s.round}/${s.rounds}, next ${state.next?.name}"
+    }
+
     private suspend fun finish() {
+        AppLog.i(TAG, "routine finished")
         cues.play(Cue.DONE)
         cues.speak(getString(R.string.done_spoken), delayMs = DONE_SPEECH_DELAY_MS)
         stopForeground(STOP_FOREGROUND_REMOVE)
@@ -127,6 +166,7 @@ class TimerService : Service() {
     }
 
     private fun end() {
+        AppLog.i(TAG, "routine stopped by the user")
         loop?.cancel()
         engine = null
         mutableState.value = null
@@ -135,8 +175,14 @@ class TimerService : Service() {
     }
 
     private fun keepAwake(state: TimerState) {
-        if (state.status == Status.RUNNING && !wakeLock.isHeld) wakeLock.acquire(state.totalRemainingMs + WAKE_SLACK_MS)
-        if (state.status == Status.PAUSED && wakeLock.isHeld) wakeLock.release()
+        if (state.status == Status.RUNNING && !wakeLock.isHeld) {
+            wakeLock.acquire(state.totalRemainingMs + WAKE_SLACK_MS)
+            AppLog.d(TAG, "wake lock acquired")
+        }
+        if (state.status == Status.PAUSED && wakeLock.isHeld) {
+            wakeLock.release()
+            AppLog.d(TAG, "wake lock released (paused)")
+        }
     }
 
     private fun notification(state: TimerState): Notification {
@@ -187,7 +233,9 @@ class TimerService : Service() {
         private const val EXTRA_ROUTINE = "routine"
         private const val CHANNEL = "timer"
         private const val NOTIFICATION_ID = 1
+        private const val TAG = "Service"
         private const val POLL_MS = 50L
+        private const val STALL_LOG_MS = 500L
         private const val START_SPEECH_DELAY_MS = 350L
         private const val DONE_SPEECH_DELAY_MS = 900L
         private const val FINISH_LINGER_MS = 5000L
@@ -202,7 +250,12 @@ class TimerService : Service() {
             val intent = Intent(context, TimerService::class.java)
                 .setAction(ACTION_START)
                 .putExtra(EXTRA_ROUTINE, RoutineJson.encode(listOf(routine)))
-            context.startForegroundService(intent)
+            AppLog.i(TAG, "start requested for '${routine.name}'")
+            try {
+                context.startForegroundService(intent)
+            } catch (e: Exception) {
+                AppLog.e(TAG, "could not start the service", e)
+            }
         }
 
         fun pause(context: Context) = send(context, ACTION_PAUSE)
@@ -216,7 +269,11 @@ class TimerService : Service() {
         }
 
         private fun send(context: Context, action: String) {
-            context.startService(Intent(context, TimerService::class.java).setAction(action))
+            try {
+                context.startService(Intent(context, TimerService::class.java).setAction(action))
+            } catch (e: Exception) {
+                AppLog.e(TAG, "could not send ${action.substringAfterLast('.')} to the service", e)
+            }
         }
     }
 }

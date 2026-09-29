@@ -3,6 +3,7 @@
 ## Check on the phone (nothing below has run on a device yet)
 Install with `./gradlew.bat installDebug` once Wireless debugging is paired.
 
+- **Log:** after a workout `adb pull` the logs folder (command in CLAUDE.md) and check it shows the started routine, one line per segment at the right times, and no `stalled` warnings. Confirm the pull works without root on Android 17; if not, use `adb exec-out run-as dev.juras.intervaltimer` on a debug build instead.
 - **Start and run:** tap a routine; the running screen appears in the phase colour, digits count down, Skip/Pause/Resume/Stop work, Stop asks for confirmation.
 - **Screen off / lock:** with the screen locked, the routine keeps going, beeps stay on time, the notification shows the phase and its Pause/Skip/Stop buttons work.
 - **Notification permission:** the prompt appears on first launch; if denied, the routine must still run.

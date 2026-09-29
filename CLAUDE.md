@@ -68,6 +68,14 @@ Personal ad-free interval timer for the user's Google Pixel 11 (Android 17, API 
 ## Verification
 Cheapest proof first: a JVM unit test for rules and timing → a Compose preview for how a screen looks → the phone only for what no test can assert (service surviving screen-off, ducking, keep-screen-on, notification, layout at real size). One phone pass per feature, after its last step. Engine tests cover phase math, deltas, pause and resume; write them as plain behaviour-named tests.
 
+## Debugging a workout after the fact
+The app logs through `AppLog` (`log/`): every line goes to logcat (tag `IntervalTimer`) and to a file in the app's external files directory, kept to about 1 MB in two rolling files. Uncaught exceptions are logged with a stack trace. With the phone connected:
+```
+adb pull /sdcard/Android/data/dev.juras.intervaltimer/files/logs/ ./phone-logs     # works for release builds too
+adb logcat -d -s IntervalTimer                                                      # what logcat still holds
+```
+Read `timer.log.1` then `timer.log`. Lines are `MM-dd HH:mm:ss.SSS LEVEL Tag: message`; tags are `App`, `Activity`, `Service` (commands, status changes, one line per segment, wake lock, `timer loop stalled` warnings when cues may have been late), `Cues` (each cue, text to speech, audio focus, settings). Look first for `E` and `W` lines, then compare each `segment n/m` line's time with the expected schedule. Log new events in the service, cue and UI-to-service code; keep `engine` free of logging (pure).
+
 ## CI/CD (after the MVP runs on the phone)
 - `.github/workflows/release.yml` on tags `v*`: `actions/setup-java` (temurin 25), `gradle/actions/setup-gradle`, `./gradlew assembleRelease`, then a GitHub Release with the APK. A public repo is simplest for Obtainium; a private repo needs a GitHub token in Obtainium.
 - Signing: one release keystore signs every release so updates install. Keep it outside the repo, back it up, store it base64-encoded in GitHub Secrets, read passwords from env vars in `signingConfigs`. Never commit keystore or passwords.
