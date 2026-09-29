@@ -14,14 +14,16 @@ fun Routine.shape(): String {
     return when {
         work != null && block.phases.size == 1 && block.rounds == 1 -> workText!!
         work != null && block.phases.size == 1 -> "${block.rounds} × $workText"
-        work != null && rest != null && block.phases.size == 2 -> "${block.rounds} × $workText work / ${rest.seconds} s rest"
+        // "until done" already says it is work, and the card is narrow, so no "work" after it.
+        work != null && rest != null && block.phases.size == 2 ->
+            "${block.rounds} × $workText${if (work.manual) "" else " work"} / ${rest.seconds} s rest"
         else -> "${block.rounds} rounds"
     }
 }
 
 /** Total length, or that there is none because some phase lasts until the user is done. */
 fun Routine.total(): String =
-    if (isOpenEnded) "no time limit" else formatSeconds((Timeline.of(this).totalMs / 1000).toInt())
+    if (isOpenEnded) "no limit" else formatSeconds((Timeline.of(this).totalMs / 1000).toInt())
 
 /** One line, e.g. `8 × 40 s work / 20 s rest · 9:30`. */
 fun Routine.summary(): String = "${shape()} · ${total()}"

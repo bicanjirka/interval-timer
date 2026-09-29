@@ -32,7 +32,7 @@ class RoutineSummaryTest {
     fun workUntilDoneShowsSetsAndNoTimeLimit() {
         val routine = Routine.untilDone("x", restSeconds = 90, sets = 5, getReadySeconds = 0)
 
-        assertEquals("5 × until done work / 90 s rest · no time limit", routine.summary())
+        assertEquals("5 × until done / 90 s rest · no limit", routine.summary())
     }
 
     @Test
