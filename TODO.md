@@ -26,7 +26,13 @@
 - Doze exemption prompt not added. **Approach:** add only if the wake lock isn't enough over a long workout.
 - The log records commands but not where they came from (notification, app or adb). **Approach:** add a source to the command intent if that ever matters.
 
-## After the MVP runs on the phone
-- Git remote, `.github/workflows/release.yml`, release keystore and signing (see CLAUDE.md); the `gh` CLI isn't installed yet.
-- Register the package and signing key with Google's developer verification (limited distribution) before the sideloading rules apply.
-- Later features: widget or launcher shortcut, lock-screen extras, Wear OS haptics, Health Connect, JSON import/export, per-phase custom sounds.
+## To publish the first release (needs the user)
+1. **Back up** `C:\Users\juras\.android-keystores\` (keystore + passwords file) somewhere outside this PC. Losing the key means installs can never be updated.
+2. **Add four GitHub secrets** in the repo: Settings → Secrets and variables → Actions → New repository secret: `ANDROID_KEYSTORE_BASE64` (paste the whole content of `interval-timer-release.jks.base64.txt`), `ANDROID_KEYSTORE_PASSWORD` and `ANDROID_KEY_PASSWORD` (both the password in `interval-timer-signing.txt`), `ANDROID_KEY_ALIAS` = `intervaltimer`.
+3. **Tag and push:** `git tag v1.0.0 && git push origin v1.0.0`. The Release workflow publishes `interval-timer-v1.0.0.apk` on the repo's Releases page.
+4. **Obtainium:** add `https://github.com/bicanjirka/interval-timer` as an app. Uninstall the debug build from the phone first (different signing key).
+5. **Google developer verification** (free; enforced from 2026-09-30 in Brazil, Indonesia, Singapore and Thailand, globally from 2027). Google account needs 2-step verification and a payments profile. In the Android Developer Console (https://android.google.com/developerconsole/developers) choose the *limited distribution* account, open **Packages**, enter package `dev.juras.intervaltimer` and the SHA-256 fingerprint from CLAUDE.md; status shows *In review*. If Google asks for proof of ownership, it provides a snippet to add to the APK's assets folder: sign an APK with the release key, upload it, and wait for the confirmation email. Then authorise the phone through the QR code or link the console gives (up to 20 devices). Docs: https://developer.android.com/developer-verification/guides/limited-distribution
+6. Not verifiable from here: the first Release run on GitHub (secrets are needed) and Obtainium updating from it.
+
+## Later
+- Features: widget or launcher shortcut, lock-screen extras, Wear OS haptics, Health Connect, JSON import/export, per-phase custom sounds.
