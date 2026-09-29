@@ -28,13 +28,15 @@ Personal ad-free interval timer for the user's Google Pixel 11 (Android 17, API 
 ## Tooling decisions
 - **Build:** Gradle with the version catalog, as generated. No extra plugins beyond what a feature needs.
 - **Unit tests:** JUnit 4 (already in the project, works with AGP out of the box) with plain `kotlin.test`-style assertions or JUnit asserts, plus `kotlinx-coroutines-test` if flows need testing. No mocking framework: the engine takes an injected clock, so hand-written fakes are enough.
-- **UI:** Compose previews and the phone. No Compose UI test suite in the MVP.
+- **UI:** Robolectric + Roborazzi render every screen to PNG on the JVM (`ScreenshotTest`), so layout and colour can be checked without a phone: run `./gradlew.bat recordRoborazziDebug`, then look at `app/build/screens/*.png`. A plain `testDebugUnitTest` only checks the screens compose. No assertion-based UI tests.
 - **Persistence:** routines as JSON (kotlinx.serialization) in a file via DataStore, not Room. A routine is a small nested document, so this is faster to build and easy to add JSON export to later. Add the dependencies when that step starts.
 - **CI:** GitHub Actions. Add `.github/workflows/release.yml` (below) after the MVP runs on the phone; a push workflow running `testDebugUnitTest` is welcome once tests exist.
 
 ## Product
 - Needs: one-tap start of saved routines, a volume the user controls independently, big colour-coded high-contrast screens readable from a distance, no ads or accounts.
-- Typical workout: a simple repeat of work and rest (e.g. 8 × 40 s work / 20 s rest). A plain timer or rounds-only routine must also be easy, and rest is optional. Default routine and editor should make these one-step.
+- Typical workouts: a simple repeat of work and rest (e.g. 10 × 1 min, rest optional), a plain timer, and **work until done**: the work time is unknown, so it counts up for information only, the user presses Done, then a fixed rest counts down, then the next set. Defaults on a fresh install: `10 × 1 min` and a work-until-done routine (60 s rest). No Tabata preset.
+- Cues (Settings): sound, sound and vibration, or vibration only (silent: no beeps, no speech, no audio focus).
+- Every screen is coloured: the running screen fills with the phase colour (colours per the research on other timer apps: whole background changes, current and next phase shown, one huge button for the main action), list cards use the routine colour, editor phase cards use the phase colour.
 - MVP: routine list with one-tap start; routine editor (add, reorder, duplicate blocks and phases); running screen; settings (volume, ducking on/off, voice on/off, keep-screen-on).
 - Not in the MVP: widget or launcher shortcut, lock-screen extras, Wear OS haptics, Health Connect, JSON import/export, dynamic colour.
 
@@ -42,7 +44,8 @@ Personal ad-free interval timer for the user's Google Pixel 11 (Android 17, API 
 - `Routine`: name, colour/icon, ordered blocks, optional warm-up and cool-down.
 - `Block`: rounds, ordered phases, rest between blocks.
 - `Phase`: name, duration, colour, optional sound, optional spoken text, optional per-round delta (add or subtract seconds each round, with a minimum).
-- Provide small factories for the common shapes (`repeat(work, rest, rounds)`, plain timer) so callers and tests don't build full structures. Rest absent means no rest phase, not a zero-length one.
+- A `Phase` with `manual = true` has no length: `TimerEngine` never ends it by itself, `skip()` is "Done", and the state reports `openEnded` (total left unknown) and counts up (`displaySeconds`).
+- Provide small factories for the common shapes (`repeat(work, rest, rounds)`, `timer`, `untilDone`) so callers and tests don't build full structures. Rest absent means no rest phase, not a zero-length one.
 - A routine saved by an older app version must still load; keep the JSON format compatible or migrate.
 
 ## Architecture
@@ -50,7 +53,7 @@ Personal ad-free interval timer for the user's Google Pixel 11 (Android 17, API 
 - **Foreground service** (`service`) runs the routine so it survives screen-off: persistent notification with pause, resume, skip; `POST_NOTIFICATIONS` runtime permission; a declared foreground service type (Android 14+). It publishes engine state as one immutable snapshot (StateFlow); the UI only reads that and sends events.
 - **Screen on** during a session via `FLAG_KEEP_SCREEN_ON`; Doze exemption prompt only if needed.
 - **UI** (`ui`): stateless composables (state in, events out). Running screen: giant countdown digits, full-screen colour per phase, current and next phase, round counter, total remaining time, large pause/skip/stop buttons, dark by default. Text in `strings.xml`.
-- Packages by feature: `engine` (`Routine`/`Block`/`Phase`, `Timeline`, `TimerEngine`, `formatSeconds`), `service` (`TimerService`, `AudioCues`), `data` (`RoutineJson`, `RoutineStore`, `SettingsStore`), `ui` (screens, `AppViewModel`, `theme`).
+- Packages by feature: `engine` (`Routine`/`Block`/`Phase`, `Timeline`, `TimerEngine`, `formatSeconds`), `service` (`TimerService`, `CuePlayer`: beeps, speech, vibration), `data` (`RoutineJson`, `RoutineStore`, `SettingsStore`), `ui` (screens, `AppViewModel`, `theme`).
 - **Timeline rule:** a rest phase at the end of a block's last round is dropped (the next block, block rest or the end follows); zero-length steps are skipped. Deltas apply per round with a minimum.
 - **Screen flow:** `App` shows `RunningScreen` whenever `TimerService.state` is non-null, else the screen `AppViewModel` is on (list, editor, settings). Leaving the editor saves. Stop asks for confirmation.
 - **Storage:** all routines are one JSON string in DataStore; new fields need defaults. Default routines have fixed ids.

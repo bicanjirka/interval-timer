@@ -6,7 +6,9 @@ Install with `./gradlew.bat installDebug` once Wireless debugging is paired.
 - **Start and run:** tap a routine; the running screen appears in the phase colour, digits count down, Skip/Pause/Resume/Stop work, Stop asks for confirmation.
 - **Screen off / lock:** with the screen locked, the routine keeps going, beeps stay on time, the notification shows the phase and its Pause/Skip/Stop buttons work.
 - **Notification permission:** the prompt appears on first launch; if denied, the routine must still run.
-- **Audio** (**Where:** `service/AudioCues.kt`)
+- **Vibration only** (**Where:** `service/CuePlayer.kt`): with "Vibration only (silent)" nothing is heard and each phase change is felt, including with the screen off and with the phone in silent/DND mode (vibration uses alarm usage). Check that the pulse patterns are distinguishable.
+- **Work until done:** the count-up runs, DONE starts the rest, the rest ends into the next set, the notification's button says Done during work.
+- **Audio** (**Where:** `service/CuePlayer.kt`)
   - Beeps and spoken phase names follow the app's own volume slider (Settings has a test-sound button).
   - Ducking: music dips during a cue and comes back; with ducking off it doesn't dip.
   - **Android 17 background-audio hardening:** cues must play with the screen off. Check with `adb shell cmd audio set-enable-hardening throw`. Cues use `USAGE_MEDIA` (follows media volume). If they are blocked or the media stream is too coupled to the phone's volume, **Approach:** switch to `USAGE_ALARM` (follows alarm volume) or add the exact-alarm permission.

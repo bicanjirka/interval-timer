@@ -181,7 +181,7 @@ private fun BlockEditor(
         Column(modifier = Modifier.padding(12.dp), verticalArrangement = Arrangement.spacedBy(8.dp)) {
             Row(verticalAlignment = Alignment.CenterVertically) {
                 Text("Block ${index + 1}", fontSize = 18.sp, modifier = Modifier.weight(1f))
-                RowActions(index > 0, index < count - 1, { onMove(-1) }, { onMove(1) }, onDuplicate, onDelete)
+                RowActions(index > 0, index < count - 1, { onMove(-1) }, { onMove(1) }, onDuplicate, onDelete, Modifier)
             }
             NumberField("Rounds", block.rounds, min = 1, modifier = Modifier.fillMaxWidth()) { onChange(block.copy(rounds = it)) }
             block.phases.forEachIndexed { j, phase ->
@@ -305,8 +305,9 @@ private fun RowActions(
     onDown: () -> Unit,
     onDuplicate: () -> Unit,
     onDelete: () -> Unit,
+    modifier: Modifier = Modifier.fillMaxWidth(),
 ) {
-    Row(horizontalArrangement = Arrangement.End, modifier = Modifier.fillMaxWidth()) {
+    Row(horizontalArrangement = Arrangement.End, modifier = modifier) {
         IconButton(onClick = onUp, enabled = canMoveUp) { Text("▲", fontSize = 18.sp) }
         IconButton(onClick = onDown, enabled = canMoveDown) { Text("▼", fontSize = 18.sp) }
         IconButton(onClick = onDuplicate) { Text("⧉", fontSize = 20.sp) }
