@@ -15,7 +15,7 @@ Personal ad-free interval timer for the user's Google Pixel 11 (Android 17, API 
 
 ## Build environment
 - JDK 25 (Temurin) at `C:\Users\juras\.jdks\temurin-25.0.4.1` (`JAVA_HOME`; a shell opened before it was set needs `$env:JAVA_HOME` set by hand). Gradle daemon toolchain pinned to 25 in `gradle/gradle-daemon-jvm.properties`; CI must use 25 too.
-- Gradle 9.6 wrapper, AGP 9.4.1 (built-in Kotlin, no `kotlin.android` plugin), Kotlin 2.4, compileSdk/targetSdk 37, minSdk 35, package `dev.juras.intervaltimer`. Android SDK at `C:\Users\juras\AppData\Local\Android\Sdk`.
+- Gradle 9.6 wrapper, AGP 9.4.1 (built-in Kotlin, no `kotlin.android` plugin), Kotlin 2.4, compileSdk/targetSdk 37, minSdk 35, package `dev.juras.intervaltimer`. `material3` is pinned to `1.5.0-alpha29` (the BOM's 1.4.0 keeps the expressive theme internal); drop the pin once 1.5 is stable. Android SDK at `C:\Users\juras\AppData\Local\Android\Sdk`.
 - Versions live in `gradle/libs.versions.toml`.
 - Windows + PowerShell: use `./gradlew.bat`.
 
@@ -36,12 +36,14 @@ Personal ad-free interval timer for the user's Google Pixel 11 (Android 17, API 
 - Needs: one-tap start of saved routines, a volume the user controls independently, big colour-coded high-contrast screens readable from a distance, no ads or accounts.
 - Typical workouts: a simple repeat of work and rest (e.g. 10 × 1 min, rest optional), a plain timer, and **work until done**: the work time is unknown, so it counts up for information only, the user presses Done, then a fixed rest counts down, then the next set. Defaults on a fresh install: `10 × 1 min` and a work-until-done routine (60 s rest). No Tabata preset.
 - Cues (Settings): sound, sound and vibration, or vibration only (silent: no beeps, no speech, no audio focus).
+- **Design system:** Material 3 Expressive (`MaterialExpressiveTheme`, spring motion, large rounded shapes, own dark colour scheme, no dynamic colour), Material icons from `material-icons-core` (extra icons like copy and minus are drawn in `ui/Icons.kt`; don't pull in the huge extended set). Primary action = extended FAB with icon and label that collapses to the icon when the list scrolls.
+- **No confirmation dialogs anywhere.** Destructive actions (stop a routine, delete a routine) happen at once and a 3-second snackbar offers "Undo stop" / "Undo delete" (`showUndo` in `ui/Undo.kt`). Use the same for any new destructive action.
 - Every screen is coloured: the running screen fills with the phase colour (colours per the research on other timer apps: whole background changes, current and next phase shown, one huge button for the main action), list cards use the routine colour, editor phase cards use the phase colour.
 - MVP: routine list with one-tap start; routine editor (add, reorder, duplicate blocks and phases); running screen; settings (volume, ducking on/off, voice on/off, keep-screen-on).
 - Not in the MVP: widget or launcher shortcut, lock-screen extras, Wear OS haptics, Health Connect, JSON import/export, dynamic colour.
 
 ## Data model
-- `Routine`: name, colour/icon, ordered blocks, optional warm-up and cool-down.
+- `Routine`: name (may be blank: the list and running screen then label it by its shape, `Routine.title()`), colour/icon, ordered blocks, optional warm-up and cool-down.
 - `Block`: rounds, ordered phases, rest between blocks.
 - `Phase`: name, duration, colour, optional sound, optional spoken text, optional per-round delta (add or subtract seconds each round, with a minimum).
 - A `Phase` with `manual = true` has no length: `TimerEngine` never ends it by itself, `skip()` is "Done", and the state reports `openEnded` (total left unknown) and counts up (`displaySeconds`).
@@ -52,10 +54,10 @@ Personal ad-free interval timer for the user's Google Pixel 11 (Android 17, API 
 - **Timer engine** (`engine`): pure Kotlin, no `android.*`, no threads. Current phase and remaining time are computed from elapsed monotonic time and the routine, never by counting ticks, so pause, resume, skip and late ticks stay exact. The clock is injected (real one wraps `SystemClock.elapsedRealtime`). Timing logic lives here, not in the service or UI.
 - **Foreground service** (`service`) runs the routine so it survives screen-off: persistent notification with pause, resume, skip; `POST_NOTIFICATIONS` runtime permission; a declared foreground service type (Android 14+). It publishes engine state as one immutable snapshot (StateFlow); the UI only reads that and sends events.
 - **Screen on** during a session via `FLAG_KEEP_SCREEN_ON`; Doze exemption prompt only if needed.
-- **UI** (`ui`): stateless composables (state in, events out). Running screen: giant countdown digits, full-screen colour per phase, current and next phase, round counter, total remaining time, large pause/skip/stop buttons, dark by default. Text in `strings.xml`.
+- **UI** (`ui`): stateless composables (state in, events out). Running screen: giant countdown digits (plain seconds below 100, `m:ss` from 100, measured to fill the space), full-screen colour per phase, phase name top left, `#round/rounds` top right, next phase, total remaining time, large pause/skip/stop buttons, dark by default. Text in `strings.xml`.
 - Packages by feature: `engine` (`Routine`/`Block`/`Phase`, `Timeline`, `TimerEngine`, `formatSeconds`), `service` (`TimerService`, `CuePlayer`: beeps, speech, vibration), `data` (`RoutineJson`, `RoutineStore`, `SettingsStore`), `ui` (screens, `AppViewModel`, `theme`).
 - **Timeline rule:** a rest phase at the end of a block's last round is dropped (the next block, block rest or the end follows); zero-length steps are skipped. Deltas apply per round with a minimum.
-- **Screen flow:** `App` shows `RunningScreen` whenever `TimerService.state` is non-null, else the screen `AppViewModel` is on (list, editor, settings). Leaving the editor saves. Stop asks for confirmation.
+- **Screen flow:** `App` shows `RunningScreen` whenever `TimerService.state` is non-null, else the screen `AppViewModel` is on (list, editor, settings). Leaving the editor saves, unless nothing changed (a new routine left as it was is not kept). **List:** tap starts; long-press selects (top bar becomes edit / copy / delete) and drags to reorder; while something is selected taps only move the selection. **Stop:** the service pauses the engine for 3 s (`TimerService.stopPending`), the snackbar offers undo, then it really ends. **Done screen:** per-round real times from `TimerState.results` via `WorkoutSummary`.
 - **Storage:** all routines are one JSON string in DataStore; new fields need defaults. Default routines have fixed ids.
 - Open items and the on-phone checklist are in `TODO.md`; the service and audio code have not been run on a device yet.
 

@@ -6,10 +6,20 @@
 - Timing: segments change within ~30 ms of the schedule, 3-2-1 ticks fire, Pause freezes and Resume continues, backgrounding the app keeps the routine running.
 - Screen off (`Dozing`): the wake lock is held, ticks and phase changes stay on the exact second across several segments, no `stalled` warnings, audio focus is requested and released around every cue and around the spoken phase name.
 - Logging: the log file is written, and `adb pull` of the logs folder works without root. A whole session of testing produced no `W`/`E` lines and no crash.
-- Work until done: count-up shows real time, DONE starts the 60 s rest (red, counting down), the rest runs into Round 2's count-up from 0:00. Stop asks for confirmation and stops.
+- Work until done: count-up shows real time, DONE starts the 60 s rest (red, counting down), the rest runs into Round 2's count-up from 0:00. Stop stopped it (before the undo-stop change).
 - Vibration only: the system logged the vibrations (alarm usage, patterns as designed) for the test signal and for every cue of a routine, and the app took no audio focus. Sound mode was restored afterwards.
 - Editor on the phone: typing works with the numeric keyboard, the total updates live, leaving saves.
 - Bugs found on the phone and fixed: the first cue of a routine used default settings (a beep even in vibration-only mode) because settings loaded asynchronously; the on-screen keyboard covered the field being edited.
+
+## Written on 2026-09-29 but not yet run on the phone (the phone was unreachable over adb)
+Unit tests and JVM screenshots pass; these need one pass on the Pixel:
+- **List:** long-press selects a card (haptic, white border, top bar shows edit / copy / delete); dragging it moves it and the order survives leaving the app; tap while selected only moves/clears the selection; back clears the selection. `detectDragGesturesAfterLongPress` next to `clickable` is the part most likely to misbehave.
+- **Undo stop:** Stop pauses, the snackbar at the top says "Routine stopped / Undo stop"; Undo continues at the same second (and stays paused if it was paused before); doing nothing ends after 3 s and returns to the list. Stop from the notification does the same.
+- **Undo delete:** delete from the selection bar, "Undo delete" puts it back in the same place.
+- **New routine** left unchanged is not added; a new routine has no name and shows as e.g. "8 × 40 s work / 20 s rest".
+- **Editor:** `+`/`−` step (5 s, rounds by 1), hold repeats, typing still works and the keyboard doesn't cover the row.
+- **Running screen:** digits fill the width with the condensed face on the real device (measured, so should not clip), 100 s and up shows `m:ss`.
+- **Done screen** shows per-round work and rest times.
 
 ## Still to check by ear, feel and hand (adb can't tell)
 - **Sound is audible** with the screen off, at the app's own volume; spoken phase names are clear; ducking dips other audio and it returns, and with ducking off it doesn't dip.
