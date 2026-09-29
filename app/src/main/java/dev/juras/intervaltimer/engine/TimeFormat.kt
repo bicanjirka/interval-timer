@@ -8,3 +8,9 @@ fun formatSeconds(totalSeconds: Int): String {
     val sec = s % 60
     return if (h > 0) "%d:%02d:%02d".format(h, m, sec) else "%d:%02d".format(m, sec)
 }
+
+/** For the huge running-screen digits: plain seconds below 100, then `m:ss`. */
+fun formatBig(totalSeconds: Int): String {
+    val s = totalSeconds.coerceAtLeast(0)
+    return if (s < 100) s.toString() else formatSeconds(s)
+}

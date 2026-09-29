@@ -11,7 +11,8 @@ enum class Status { READY, RUNNING, PAUSED, FINISHED }
  * A snapshot of the engine at one moment. [segment] and [next] are null when there is nothing
  * running / nothing after it. For a manual segment the time counts up ([segmentElapsedMs]) and
  * [segmentRemainingMs] is 0; [openEnded] says the total left cannot be known because a manual
- * segment is still to come (or running).
+ * segment is still to come (or running). [results] holds how long each segment really took, and
+ * is only filled once the routine is [Status.FINISHED].
  */
 data class TimerState(
     val routineName: String,
@@ -24,6 +25,7 @@ data class TimerState(
     val segmentRemainingMs: Long,
     val totalRemainingMs: Long,
     val openEnded: Boolean,
+    val results: List<SegmentResult> = emptyList(),
 ) {
     /** Whole seconds left in the segment, rounded up, so the display never shows 0 early. */
     val segmentSeconds: Int get() = ceilSeconds(segmentRemainingMs)
@@ -36,6 +38,9 @@ data class TimerState(
     private fun ceilSeconds(ms: Long) = ((ms + 999) / 1000).toInt()
 }
 
+/** How long [segment] really lasted: less than planned when skipped, the user's own time when manual. */
+data class SegmentResult(val segment: Segment, val actualMs: Long)
+
 /**
  * Runs a [Routine] against a clock. Position is computed from elapsed time, so late polls,
  * pause/resume and skips cannot drift. A manual segment never ends by itself: [skip] is how the
@@ -47,6 +52,7 @@ class TimerEngine(private val routine: Routine, private val clock: MonotonicCloc
     private var bankedMs = 0L
     private var runningSinceMs: Long? = null
     private var started = false
+    private val results = mutableListOf<SegmentResult>()
 
     fun start() {
         if (started) return
@@ -70,6 +76,7 @@ class TimerEngine(private val routine: Routine, private val clock: MonotonicCloc
     fun skip() {
         settle()
         if (!started || index >= segments.size) return
+        results += SegmentResult(segments[index], elapsedInSegment())
         index++
         bankedMs = 0
         if (runningSinceMs != null) runningSinceMs = clock.nowMs()
@@ -97,6 +104,7 @@ class TimerEngine(private val routine: Routine, private val clock: MonotonicCloc
             segmentRemainingMs = remaining,
             totalRemainingMs = remaining + later.sumOf { it.durationMs },
             openEnded = current?.manual == true || later.any { it.manual },
+            results = if (current == null) results.toList() else emptyList(),
         )
     }
 
@@ -109,6 +117,7 @@ class TimerEngine(private val routine: Routine, private val clock: MonotonicCloc
             val s = segments[index]
             if (s.manual || elapsed < s.durationMs) break
             elapsed -= s.durationMs
+            results += SegmentResult(s, s.durationMs)
             index++
         }
         bankedMs = if (index < segments.size) elapsed else 0
