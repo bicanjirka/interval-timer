@@ -1,27 +1,27 @@
 # TODO
 
-## Check on the phone (nothing below has run on a device yet)
-Install with `./gradlew.bat installDebug` once Wireless debugging is paired.
+## Verified on the Pixel 10 (Android 17, API 37) on 2026-09-29, over adb
+- Debug build installs and launches; the routine list, get-ready (orange) and work (green) screens render on the real phone as they do in the JVM screenshots.
+- Starting a routine runs `TimerService` as a foreground `mediaPlayback` service; the notification exists with 3 actions.
+- Timing: segments change within ~30 ms of the schedule, 3-2-1 ticks fire, Pause freezes and Resume continues, backgrounding the app keeps the routine running.
+- Screen off (`Dozing`): the wake lock is held, ticks and phase changes stay on the exact second across several segments, no `stalled` warnings, audio focus is requested and released around every cue and around the spoken phase name.
+- Logging: the log file is written, and `adb pull` of the logs folder works without root.
 
-- **Log:** after a workout `adb pull` the logs folder (command in CLAUDE.md) and check it shows the started routine, one line per segment at the right times, and no `stalled` warnings. Confirm the pull works without root on Android 17; if not, use `adb exec-out run-as dev.juras.intervaltimer` on a debug build instead.
-- **Start and run:** tap a routine; the running screen appears in the phase colour, digits count down, Skip/Pause/Resume/Stop work, Stop asks for confirmation.
-- **Screen off / lock:** with the screen locked, the routine keeps going, beeps stay on time, the notification shows the phase and its Pause/Skip/Stop buttons work.
-- **Notification permission:** the prompt appears on first launch; if denied, the routine must still run.
-- **Vibration only** (**Where:** `service/CuePlayer.kt`): with "Vibration only (silent)" nothing is heard and each phase change is felt, including with the screen off and with the phone in silent/DND mode (vibration uses alarm usage). Check that the pulse patterns are distinguishable.
+## Still to check by ear, feel and hand (adb can't tell)
+- **Sound is audible** with the screen off, at the app's own volume; spoken phase names are clear; ducking dips other audio and it returns, and with ducking off it doesn't dip.
+- **Android 17 hardening:** no hardening violation was seen in the log with the screen off, but `cmd audio set-enable-hardening` doesn't exist on this build, so strict mode wasn't forced. Cues use `USAGE_MEDIA`. If sound ever fails while backgrounded, **Approach:** switch to `USAGE_ALARM` or add exact-alarm permission.
+- **Vibration only** (**Where:** `service/CuePlayer.kt`): nothing is heard and each phase change is felt, also with the screen off and in silent/DND mode (alarm usage). Check that the pulse patterns are distinguishable.
 - **Work until done:** the count-up runs, DONE starts the rest, the rest ends into the next set, the notification's button says Done during work.
-- **Audio** (**Where:** `service/CuePlayer.kt`)
-  - Beeps and spoken phase names follow the app's own volume slider (Settings has a test-sound button).
-  - Ducking: music dips during a cue and comes back; with ducking off it doesn't dip.
-  - **Android 17 background-audio hardening:** cues must play with the screen off. Check with `adb shell cmd audio set-enable-hardening throw`. Cues use `USAGE_MEDIA` (follows media volume). If they are blocked or the media stream is too coupled to the phone's volume, **Approach:** switch to `USAGE_ALARM` (follows alarm volume) or add the exact-alarm permission.
-  - Speech and the start beep overlap slightly (speech starts 350 ms after the beep); tune `START_SPEECH_DELAY_MS` in `TimerService`.
-- **Keep screen on:** the screen stays lit on the running screen, and only there.
+- **Notification buttons** (Pause, Skip, Stop) work from the shade and the lock screen.
+- **Keep screen on:** the screen stays lit on the running screen only.
 - **Editor:** add, reorder, duplicate and delete blocks and phases; colours; per-round delta; leaving the screen saves.
-- **Layout:** digits fill the screen at real size; buttons are easy to hit with sweaty hands.
+- **Layout with sweaty hands:** buttons are easy to hit; digits readable from a distance.
+- Speech and the start beep overlap slightly (speech starts 350 ms after the beep); tune `START_SPEECH_DELAY_MS` in `TimerService` if it sounds messy.
 
 ## Known gaps
 - Process death mid-routine loses the running state (the service stops with the process). **Approach:** only if it happens in practice; persist the routine and start time and rebuild the engine.
-- No Compose previews or UI tests. **Approach:** add previews for each running-screen colour if layout tuning gets painful.
-- Doze exemption prompt not added. **Approach:** add only if the wake lock isn't enough on the device.
+- Doze exemption prompt not added. **Approach:** add only if the wake lock isn't enough over a long workout.
+- The log records commands but not where they came from (notification, app or adb). **Approach:** add a source to the command intent if that ever matters.
 
 ## After the MVP runs on the phone
 - Git remote, `.github/workflows/release.yml`, release keystore and signing (see CLAUDE.md); the `gh` CLI isn't installed yet.

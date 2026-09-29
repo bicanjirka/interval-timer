@@ -68,6 +68,13 @@ Personal ad-free interval timer for the user's Google Pixel 11 (Android 17, API 
 ## Verification
 Cheapest proof first: a JVM unit test for rules and timing → a Compose preview for how a screen looks → the phone only for what no test can assert (service surviving screen-off, ducking, keep-screen-on, notification, layout at real size). One phone pass per feature, after its last step. Engine tests cover phase math, deltas, pause and resume; write them as plain behaviour-named tests.
 
+## Talking to the phone from this machine
+`adb` is at `C:\Users\juras\AppData\Local\Android\Sdk\platform-tools\adb.exe`. The user pairs over Wireless debugging (`adb pair <ip>:<pairing-port> <code>`); after that, if `adb devices` is empty, restart the server (`adb kill-server`, `adb start-server`, wait a few seconds) and mDNS finds the connect port by itself (`adb mdns services`). The phone is a Pixel 10 on Android 17. The port changes when Wi-Fi toggles.
+- In Git Bash set `MSYS_NO_PATHCONV=1` before adb commands that take `/sdcard/...` paths, and give local destinations as `C:/...` paths.
+- Install and launch: `./gradlew.bat installDebug` (it can end with a harmless `TimeoutException` after "Installed on 1 device"), `adb shell am start -n dev.juras.intervaltimer/.MainActivity`. Grant notifications with `adb shell pm grant dev.juras.intervaltimer android.permission.POST_NOTIFICATIONS`.
+- Look at the screen: `adb exec-out screencap -p > file.png` (phone screenshots come out at 1080×2424). Tap with `adb shell input tap x y`; screen off/on is `input keyevent 223` / `224`.
+- The user may be holding the phone: expect their own taps in the log, and warn before making it beep.
+
 ## Debugging a workout after the fact
 The app logs through `AppLog` (`log/`): every line goes to logcat (tag `IntervalTimer`) and to a file in the app's external files directory, kept to about 1 MB in two rolling files. Uncaught exceptions are logged with a stack trace. With the phone connected:
 ```
