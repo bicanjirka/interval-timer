@@ -68,6 +68,11 @@ class TimerService : Service() {
                 ACTION_PAUSE -> { cancelStop(restore = false); engine?.pause() }
                 ACTION_RESUME -> { cancelStop(restore = false); engine?.resume() }
                 ACTION_SKIP -> { cancelStop(restore = false); engine?.skip() }
+                ACTION_RATE -> {
+                    val rating = intent.getIntExtra(EXTRA_RATING, 0).takeIf { it > 0 }
+                    AppLog.i(TAG, "rating ${rating ?: "cleared"}")
+                    engine?.rate(rating)
+                }
                 ACTION_STOP -> requestStop()
                 ACTION_UNDO_STOP -> cancelStop(restore = true)
             }
@@ -127,7 +132,7 @@ class TimerService : Service() {
                     lastIndex = state.segmentIndex
                     AppLog.i(TAG, "segment ${state.segmentIndex + 1}/${state.segmentCount}: ${describe(state)}")
                 }
-                val key = listOf(state.status, state.segmentIndex, state.displaySeconds, state.totalSeconds)
+                val key = listOf(state.status, state.segmentIndex, state.displaySeconds, state.totalSeconds, state.rating)
                 if (key != published) {
                     published = key
                     mutableState.value = state
@@ -274,7 +279,9 @@ class TimerService : Service() {
         private const val ACTION_SKIP = "dev.juras.intervaltimer.SKIP"
         private const val ACTION_STOP = "dev.juras.intervaltimer.STOP"
         private const val ACTION_UNDO_STOP = "dev.juras.intervaltimer.UNDO_STOP"
+        private const val ACTION_RATE = "dev.juras.intervaltimer.RATE"
         private const val EXTRA_ROUTINE = "routine"
+        private const val EXTRA_RATING = "rating"
         private const val CHANNEL = "timer"
         private const val NOTIFICATION_ID = 1
         private const val TAG = "Service"
@@ -313,14 +320,18 @@ class TimerService : Service() {
         fun stop(context: Context) = send(context, ACTION_STOP)
         fun undoStop(context: Context) = send(context, ACTION_UNDO_STOP)
 
+        /** Rates the current work phase; null clears the rating. */
+        fun rate(context: Context, rating: Int?) =
+            send(context, ACTION_RATE) { it.putExtra(EXTRA_RATING, rating ?: 0) }
+
         /** Clears the finished state once the user has seen it. */
         fun dismiss() {
             if (mutableState.value?.status == Status.FINISHED) mutableState.value = null
         }
 
-        private fun send(context: Context, action: String) {
+        private fun send(context: Context, action: String, extras: (Intent) -> Intent = { it }) {
             try {
-                context.startService(Intent(context, TimerService::class.java).setAction(action))
+                context.startService(extras(Intent(context, TimerService::class.java).setAction(action)))
             } catch (e: Exception) {
                 AppLog.e(TAG, "could not send ${action.substringAfterLast('.')} to the service", e)
             }

@@ -16,7 +16,10 @@ data class Segment(
     val round: Int = 0,
     val rounds: Int = 0,
     val manual: Boolean = false,
-)
+) {
+    /** Only work can be rated for effort: not get-ready, rest or cool-down. */
+    val rateable: Boolean get() = kind == PhaseKind.WORK
+}
 
 /** A routine flattened into consecutive [segments]. */
 class Timeline(val segments: List<Segment>) {

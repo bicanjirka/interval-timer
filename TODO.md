@@ -28,6 +28,9 @@
 - **Layout with sweaty hands:** buttons are easy to hit; digits readable from a distance.
 - Speech and the start beep overlap slightly (speech starts 350 ms after the beep); tune `START_SPEECH_DELAY_MS` in `TimerService` if it sounds messy.
 
+## Effort rating
+- Tried on the phone by the user on 2026-09-30: works. Not separately checked: the "Undo stop" snackbar covers the bottom row of rating buttons for its 3 seconds.
+
 ## Known gaps
 - Process death mid-routine loses the running state (the service stops with the process). **Approach:** only if it happens in practice; persist the routine and start time and rebuild the engine.
 - Doze exemption prompt not added. **Approach:** add only if the wake lock isn't enough over a long workout.

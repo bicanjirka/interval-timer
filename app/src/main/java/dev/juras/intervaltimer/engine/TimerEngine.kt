@@ -26,6 +26,7 @@ data class TimerState(
     val totalRemainingMs: Long,
     val openEnded: Boolean,
     val results: List<SegmentResult> = emptyList(),
+    val rating: Int? = null,
 ) {
     /** Whole seconds left in the segment, rounded up, so the display never shows 0 early. */
     val segmentSeconds: Int get() = ceilSeconds(segmentRemainingMs)
@@ -38,8 +39,14 @@ data class TimerState(
     private fun ceilSeconds(ms: Long) = ((ms + 999) / 1000).toInt()
 }
 
-/** How long [segment] really lasted: less than planned when skipped, the user's own time when manual. */
-data class SegmentResult(val segment: Segment, val actualMs: Long)
+/**
+ * How long [segment] really lasted: less than planned when skipped, the user's own time when manual.
+ * [rating] is how hard the user said it was ([MIN_RATING]..[MAX_RATING]), null when not rated.
+ */
+data class SegmentResult(val segment: Segment, val actualMs: Long, val rating: Int? = null)
+
+const val MIN_RATING = 1
+const val MAX_RATING = 10
 
 /**
  * Runs a [Routine] against a clock. Position is computed from elapsed time, so late polls,
@@ -53,6 +60,7 @@ class TimerEngine(private val routine: Routine, private val clock: MonotonicCloc
     private var runningSinceMs: Long? = null
     private var started = false
     private val results = mutableListOf<SegmentResult>()
+    private val ratings = mutableMapOf<Int, Int>()
 
     fun start() {
         if (started) return
@@ -76,10 +84,24 @@ class TimerEngine(private val routine: Routine, private val clock: MonotonicCloc
     fun skip() {
         settle()
         if (!started || index >= segments.size) return
-        results += SegmentResult(segments[index], elapsedInSegment())
+        results += SegmentResult(segments[index], elapsedInSegment(), ratings[index])
         index++
         bankedMs = 0
         if (runningSinceMs != null) runningSinceMs = clock.nowMs()
+    }
+
+    /**
+     * Rates how hard the current segment was; null clears it. Ignored outside work segments and for
+     * numbers outside [MIN_RATING]..[MAX_RATING]. Works while paused, and up to the end of the segment.
+     */
+    fun rate(rating: Int?) {
+        settle()
+        val segment = segments.getOrNull(index) ?: return
+        if (!started || !segment.rateable) return
+        when {
+            rating == null -> ratings.remove(index)
+            rating in MIN_RATING..MAX_RATING -> ratings[index] = rating
+        }
     }
 
     fun state(): TimerState {
@@ -105,6 +127,7 @@ class TimerEngine(private val routine: Routine, private val clock: MonotonicCloc
             totalRemainingMs = remaining + later.sumOf { it.durationMs },
             openEnded = current?.manual == true || later.any { it.manual },
             results = if (current == null) results.toList() else emptyList(),
+            rating = ratings[index],
         )
     }
 
@@ -117,7 +140,7 @@ class TimerEngine(private val routine: Routine, private val clock: MonotonicCloc
             val s = segments[index]
             if (s.manual || elapsed < s.durationMs) break
             elapsed -= s.durationMs
-            results += SegmentResult(s, s.durationMs)
+            results += SegmentResult(s, s.durationMs, ratings[index])
             index++
         }
         bankedMs = if (index < segments.size) elapsed else 0

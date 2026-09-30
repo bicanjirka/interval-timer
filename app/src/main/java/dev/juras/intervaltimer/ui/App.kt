@@ -42,7 +42,9 @@ fun App(viewModel: AppViewModel = viewModel()) {
         RunningScreen(
             state = state,
             keepScreenOn = current.keepScreenOn,
+            ratingEnabled = current.rating,
             snackbarHostState = snackbar,
+            onRate = { TimerService.rate(context, it) },
             onPause = { TimerService.pause(context) },
             onResume = { TimerService.resume(context) },
             onSkip = { TimerService.skip(context) },

@@ -44,8 +44,11 @@ class ScreenshotTest {
         return engine.state()
     }
 
-    private fun running(state: TimerState) = @Composable {
-        RunningScreen(state, keepScreenOn = false, snackbarHostState = SnackbarHostState(), onPause = {}, onResume = {}, onSkip = {}, onStop = {}, onClose = {})
+    private fun running(state: TimerState, ratingEnabled: Boolean = false) = @Composable {
+        RunningScreen(
+            state, keepScreenOn = false, snackbarHostState = SnackbarHostState(),
+            onPause = {}, onResume = {}, onSkip = {}, onStop = {}, onClose = {}, ratingEnabled = ratingEnabled,
+        )
     }
 
     private val tenByOneMinute = DefaultRoutines.all()[0]
@@ -79,6 +82,39 @@ class ScreenshotTest {
             if (i < 3) clock.advanceSeconds(60.0)
         }
         capture("finished-until-done", running(engine.state()))
+    }
+
+    @Test
+    fun runningWorkWithRatingScreen() {
+        val clock = FakeClock()
+        val engine = TimerEngine(tenByOneMinute, clock).also { it.start() }
+        clock.advanceSeconds(10.0 + 23.0)
+        engine.rate(7)
+        capture("running-work-rating", running(engine.state(), ratingEnabled = true))
+    }
+
+    @Test
+    fun runningUntilDoneWithRatingScreen() {
+        val clock = FakeClock()
+        val engine = TimerEngine(untilDone, clock).also { it.start() }
+        clock.advanceSeconds(5.0 + 42.0)
+        capture("running-until-done-rating", running(engine.state(), ratingEnabled = true))
+    }
+
+    @Test
+    fun runningRestHasNoRatingScreen() = capture("running-rest-no-rating", running(stateAt(untilDone, 5.0 + 40.0, skips = 1), ratingEnabled = true))
+
+    @Test
+    fun finishedWithRatingsScreen() {
+        val clock = FakeClock()
+        val engine = TimerEngine(Routine.untilDone("Pull-ups", restSeconds = 60, sets = 4, getReadySeconds = 0), clock).also { it.start() }
+        listOf(42.0 to 6, 38.0 to 7, 45.0 to null, 31.0 to 9).forEachIndexed { i, (work, rating) ->
+            clock.advanceSeconds(work)
+            engine.rate(rating)
+            engine.skip()
+            if (i < 3) clock.advanceSeconds(60.0)
+        }
+        capture("finished-ratings", running(engine.state()))
     }
 
     @Test

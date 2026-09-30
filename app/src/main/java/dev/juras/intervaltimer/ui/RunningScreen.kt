@@ -2,6 +2,7 @@ package dev.juras.intervaltimer.ui
 
 import androidx.compose.foundation.Canvas
 import androidx.compose.foundation.background
+import androidx.compose.foundation.clickable
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.Column
@@ -11,8 +12,10 @@ import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.foundation.layout.height
 import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.layout.safeDrawingPadding
+import androidx.compose.foundation.layout.size
 import androidx.compose.foundation.lazy.LazyColumn
 import androidx.compose.foundation.lazy.items
+import androidx.compose.foundation.shape.CircleShape
 import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.material3.Button
 import androidx.compose.material3.ButtonDefaults
@@ -28,6 +31,7 @@ import androidx.compose.ui.geometry.Offset
 import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.platform.LocalDensity
 import androidx.compose.ui.platform.LocalView
+import androidx.compose.ui.semantics.Role
 import androidx.compose.ui.semantics.contentDescription
 import androidx.compose.ui.semantics.semantics
 import androidx.compose.ui.text.PlatformTextStyle
@@ -41,6 +45,8 @@ import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.text.style.TextOverflow
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
+import dev.juras.intervaltimer.engine.MAX_RATING
+import dev.juras.intervaltimer.engine.MIN_RATING
 import dev.juras.intervaltimer.engine.RoundStat
 import dev.juras.intervaltimer.engine.Segment
 import dev.juras.intervaltimer.engine.Status
@@ -48,6 +54,7 @@ import dev.juras.intervaltimer.engine.TimerState
 import dev.juras.intervaltimer.engine.WorkoutSummary
 import dev.juras.intervaltimer.engine.formatBig
 import dev.juras.intervaltimer.engine.formatSeconds
+import java.util.Locale
 
 private val DoneColor = Color(0xFF1B5E20)
 private val ButtonColors @Composable get() = ButtonDefaults.buttonColors(
@@ -70,6 +77,8 @@ fun RunningScreen(
     onSkip: () -> Unit,
     onStop: () -> Unit,
     onClose: () -> Unit,
+    ratingEnabled: Boolean = false,
+    onRate: (Int?) -> Unit = {},
 ) {
     KeepScreenOn(keepScreenOn)
     val finished = state.status == Status.FINISHED
@@ -84,6 +93,9 @@ fun RunningScreen(
             } else {
                 Header(state)
                 RunningBody(Modifier.weight(1f), state)
+                if (ratingEnabled && state.segment?.rateable == true) {
+                    RatingButtons(state.rating, onRate)
+                }
                 Controls(state.segment?.manual == true, state.status == Status.PAUSED, onPause, onResume, onSkip, onStop)
             }
         }
@@ -178,6 +190,31 @@ private const val REFERENCE_PX = 200f
 
 private val DigitFont = FontFamily(Font(DeviceFontFamilyName("sans-serif-condensed"), FontWeight.Bold))
 
+/** How hard was this work phase: 1–10 in two rows of five. Tapping the chosen number again clears it. */
+@Composable
+private fun RatingButtons(selected: Int?, onRate: (Int?) -> Unit) {
+    Column(modifier = Modifier.fillMaxWidth().padding(bottom = 12.dp), verticalArrangement = Arrangement.spacedBy(8.dp)) {
+        (MIN_RATING..MAX_RATING).chunked(5).forEach { numbers ->
+            Row(modifier = Modifier.fillMaxWidth(), horizontalArrangement = Arrangement.spacedBy(8.dp)) {
+                numbers.forEach { n ->
+                    val chosen = n == selected
+                    Box(
+                        modifier = Modifier
+                            .weight(1f)
+                            .height(56.dp)
+                            .background(if (chosen) Color.White else Color.Black.copy(alpha = 0.4f), RoundedCornerShape(16.dp))
+                            .clickable(role = Role.Button) { onRate(if (chosen) null else n) }
+                            .semantics { contentDescription = "Effort $n" },
+                        contentAlignment = Alignment.Center,
+                    ) {
+                        Text(n.toString(), fontSize = 26.sp, fontWeight = FontWeight.Bold, color = if (chosen) Color.Black else Color.White)
+                    }
+                }
+            }
+        }
+    }
+}
+
 @Composable
 private fun Controls(
     manual: Boolean,
@@ -223,32 +260,34 @@ private fun DoneBody(modifier: Modifier, state: TimerState, onClose: () -> Unit)
         Text("Done!", fontSize = 56.sp, fontWeight = FontWeight.Bold, color = Color.White)
         Text(state.routineName, fontSize = 16.sp, color = Soft, maxLines = 1, overflow = TextOverflow.Ellipsis)
         Row(modifier = Modifier.fillMaxWidth().padding(vertical = 12.dp), horizontalArrangement = Arrangement.spacedBy(8.dp)) {
-            Stat("Total", summary.totalMs, Modifier.weight(1f))
-            Stat("Work", summary.workMs, Modifier.weight(1f))
-            if (summary.rounds.size > 1) Stat("Avg work", summary.averageWorkMs, Modifier.weight(1f))
+            Stat("Total", formatMs(summary.totalMs), Modifier.weight(1f))
+            Stat("Work", formatMs(summary.workMs), Modifier.weight(1f))
+            if (summary.rounds.size > 1) Stat("Avg work", formatMs(summary.averageWorkMs), Modifier.weight(1f))
+            summary.averageRating?.let { Stat("Avg effort", "%.1f".format(Locale.US, it), Modifier.weight(1f)) }
         }
         val longest = summary.rounds.maxOfOrNull { it.workMs } ?: 0
+        val showRating = summary.averageRating != null
         LazyColumn(modifier = Modifier.weight(1f).fillMaxWidth(), verticalArrangement = Arrangement.spacedBy(8.dp)) {
-            items(summary.rounds) { round -> RoundRow(round, longest, showBlock = summary.rounds.any { it.block > 1 }) }
+            items(summary.rounds) { round -> RoundRow(round, longest, showBlock = summary.rounds.any { it.block > 1 }, showRating) }
         }
         ControlButton("Close", Modifier.fillMaxWidth().padding(top = 12.dp), onClose)
     }
 }
 
 @Composable
-private fun Stat(label: String, ms: Long, modifier: Modifier) {
+private fun Stat(label: String, value: String, modifier: Modifier) {
     Column(
         modifier = modifier.background(Color.Black.copy(alpha = 0.25f), RoundedCornerShape(16.dp)).padding(vertical = 10.dp),
         horizontalAlignment = Alignment.CenterHorizontally,
     ) {
-        Text(formatMs(ms), fontSize = 28.sp, fontWeight = FontWeight.Bold, color = Color.White)
+        Text(value, fontSize = 28.sp, fontWeight = FontWeight.Bold, color = Color.White, maxLines = 1)
         Text(label, fontSize = 14.sp, color = Soft)
     }
 }
 
-/** One round: its number, real work time (with a bar against the longest round) and rest time. */
+/** One round: its number, real work time (with a bar against the longest round), rest time and, if any round was rated, its effort. */
 @Composable
-private fun RoundRow(round: RoundStat, longestWorkMs: Long, showBlock: Boolean) {
+private fun RoundRow(round: RoundStat, longestWorkMs: Long, showBlock: Boolean, showRating: Boolean) {
     Column(modifier = Modifier.fillMaxWidth().background(Color.Black.copy(alpha = 0.25f), RoundedCornerShape(16.dp)).padding(12.dp)) {
         Row(verticalAlignment = Alignment.CenterVertically) {
             Text(
@@ -260,6 +299,23 @@ private fun RoundRow(round: RoundStat, longestWorkMs: Long, showBlock: Boolean) 
             )
             Text("Work ${formatMs(round.workMs)}", fontSize = 22.sp, fontWeight = FontWeight.Bold, color = Color.White)
             if (round.restMs > 0) Text("  Rest ${formatMs(round.restMs)}", fontSize = 18.sp, color = Soft)
+            if (showRating) {
+                Box(
+                    modifier = Modifier
+                        .padding(start = 12.dp)
+                        .size(36.dp)
+                        .background(if (round.rating != null) Color.White else Color.Black.copy(alpha = 0.25f), CircleShape)
+                        .semantics { contentDescription = "Effort ${round.rating ?: "not rated"}" },
+                    contentAlignment = Alignment.Center,
+                ) {
+                    Text(
+                        round.rating?.toString() ?: "–",
+                        fontSize = 20.sp,
+                        fontWeight = FontWeight.Bold,
+                        color = if (round.rating != null) Color.Black else Soft,
+                    )
+                }
+            }
         }
         if (longestWorkMs > 0) {
             Box(
