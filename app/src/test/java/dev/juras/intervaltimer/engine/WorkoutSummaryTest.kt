@@ -1,6 +1,7 @@
 package dev.juras.intervaltimer.engine
 
 import org.junit.Assert.assertEquals
+import org.junit.Assert.assertFalse
 import org.junit.Assert.assertTrue
 import org.junit.Test
 
@@ -67,6 +68,59 @@ class WorkoutSummaryTest {
         engine.skip()
 
         assertEquals(15_000, WorkoutSummary(engine.state().results).workMs)
+    }
+
+    @Test
+    fun identicalTimedRoundsAreNotWorthListing() {
+        val engine = engine(Routine.repeat("r", 60, 30, rounds = 10, getReadySeconds = 0))
+
+        clock.advanceSeconds(2000.0)
+
+        assertFalse(WorkoutSummary(engine.state().results).worthListingRounds)
+    }
+
+    @Test
+    fun workUntilDoneRoundsAreWorthListingWhenTheyDiffer() {
+        val engine = engine(Routine.untilDone("u", restSeconds = 30, sets = 2, getReadySeconds = 0))
+
+        clock.advanceSeconds(42.0)
+        engine.skip()
+        clock.advanceSeconds(30.0 + 75.0)
+        engine.skip()
+
+        assertTrue(WorkoutSummary(engine.state().results).worthListingRounds)
+    }
+
+    @Test
+    fun aSkippedRoundMakesTheListWorthShowing() {
+        val engine = engine(Routine.repeat("r", 60, 0, rounds = 3, getReadySeconds = 0))
+
+        clock.advanceSeconds(60.0)
+        clock.advanceSeconds(20.0)
+        engine.skip()
+        clock.advanceSeconds(100.0)
+
+        assertTrue(WorkoutSummary(engine.state().results).worthListingRounds)
+    }
+
+    @Test
+    fun ratedRoundsAreWorthListingEvenWhenIdentical() {
+        val engine = TimerEngine(Routine.repeat("r", 10, 5, rounds = 2, getReadySeconds = 0).copy(rateEffort = true), clock)
+            .also { it.start() }
+
+        engine.rate(6)
+        clock.advanceSeconds(100.0)
+
+        assertTrue(WorkoutSummary(engine.state().results).worthListingRounds)
+    }
+
+    @Test
+    fun aPlainTimerIsNotWorthListing() {
+        val engine = engine(Routine.timer("t", 30, getReadySeconds = 0))
+
+        clock.advanceSeconds(40.0)
+
+        assertFalse(WorkoutSummary(engine.state().results).worthListingRounds)
     }
 
     @Test

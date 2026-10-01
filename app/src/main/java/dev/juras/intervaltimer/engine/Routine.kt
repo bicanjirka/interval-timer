@@ -65,6 +65,8 @@ data class Routine(
     val warmUp: Phase? = null,
     val blocks: List<Block>,
     val coolDown: Phase? = null,
+    /** Whether the running screen asks for a 1–10 effort rating during each work phase. */
+    val rateEffort: Boolean = false,
 ) {
     /** True when some phase lasts until the user ends it, so the total time can't be known. */
     val isOpenEnded: Boolean

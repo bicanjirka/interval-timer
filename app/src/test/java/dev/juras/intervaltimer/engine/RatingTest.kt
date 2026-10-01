@@ -7,9 +7,25 @@ import org.junit.Test
 class RatingTest {
     private val clock = FakeClock()
 
-    private fun engine(routine: Routine) = TimerEngine(routine, clock).also { it.start() }
+    private fun engine(routine: Routine, rateEffort: Boolean = true) =
+        TimerEngine(routine.copy(rateEffort = rateEffort), clock).also { it.start() }
 
     private fun summary(engine: TimerEngine) = WorkoutSummary(engine.state().results)
+
+    @Test
+    fun aRoutineWithoutRateEffortIgnoresRatings() {
+        val engine = engine(Routine.timer("t", 60, getReadySeconds = 0), rateEffort = false)
+
+        engine.rate(7)
+
+        assertNull(engine.state().rating)
+        assertEquals(false, engine.state().rateEffort)
+    }
+
+    @Test
+    fun theStateTellsWhetherTheRoutineAsksForRatings() {
+        assertEquals(true, engine(Routine.timer("t", 60, getReadySeconds = 0)).state().rateEffort)
+    }
 
     @Test
     fun aRatedWorkPhaseShowsItsRatingInTheState() {

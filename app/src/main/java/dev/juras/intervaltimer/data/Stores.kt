@@ -28,7 +28,6 @@ data class Settings(
     val ducking: Boolean = true,
     val voice: Boolean = true,
     val keepScreenOn: Boolean = true,
-    val rating: Boolean = false,
 )
 
 class SettingsStore(context: Context) {
@@ -42,7 +41,6 @@ class SettingsStore(context: Context) {
             ducking = it[DUCKING] ?: d.ducking,
             voice = it[VOICE] ?: d.voice,
             keepScreenOn = it[KEEP_SCREEN_ON] ?: d.keepScreenOn,
-            rating = it[RATING] ?: d.rating,
         )
     }
 
@@ -55,7 +53,6 @@ class SettingsStore(context: Context) {
             it[DUCKING] = settings.ducking
             it[VOICE] = settings.voice
             it[KEEP_SCREEN_ON] = settings.keepScreenOn
-            it[RATING] = settings.rating
         }
     }
 
@@ -65,7 +62,6 @@ class SettingsStore(context: Context) {
         val DUCKING = booleanPreferencesKey("ducking")
         val VOICE = booleanPreferencesKey("voice")
         val KEEP_SCREEN_ON = booleanPreferencesKey("keep_screen_on")
-        val RATING = booleanPreferencesKey("rating")
     }
 }
 

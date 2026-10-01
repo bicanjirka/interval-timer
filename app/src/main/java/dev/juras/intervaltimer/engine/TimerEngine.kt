@@ -27,6 +27,7 @@ data class TimerState(
     val openEnded: Boolean,
     val results: List<SegmentResult> = emptyList(),
     val rating: Int? = null,
+    val rateEffort: Boolean = false,
 ) {
     /** Whole seconds left in the segment, rounded up, so the display never shows 0 early. */
     val segmentSeconds: Int get() = ceilSeconds(segmentRemainingMs)
@@ -91,13 +92,14 @@ class TimerEngine(private val routine: Routine, private val clock: MonotonicCloc
     }
 
     /**
-     * Rates how hard the current segment was; null clears it. Ignored outside work segments and for
-     * numbers outside [MIN_RATING]..[MAX_RATING]. Works while paused, and up to the end of the segment.
+     * Rates how hard the current segment was; null clears it. Ignored unless the routine has
+     * [Routine.rateEffort], outside work segments and for numbers outside [MIN_RATING]..[MAX_RATING].
+     * Works while paused, and up to the end of the segment.
      */
     fun rate(rating: Int?) {
         settle()
         val segment = segments.getOrNull(index) ?: return
-        if (!started || !segment.rateable) return
+        if (!routine.rateEffort || !started || !segment.rateable) return
         when {
             rating == null -> ratings.remove(index)
             rating in MIN_RATING..MAX_RATING -> ratings[index] = rating
@@ -128,6 +130,7 @@ class TimerEngine(private val routine: Routine, private val clock: MonotonicCloc
             openEnded = current?.manual == true || later.any { it.manual },
             results = if (current == null) results.toList() else emptyList(),
             rating = ratings[index],
+            rateEffort = routine.rateEffort,
         )
     }
 

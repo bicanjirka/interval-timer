@@ -25,8 +25,21 @@ class WorkoutSummary(results: List<SegmentResult>) {
             )
         }
 
+    /**
+     * Whether a per-round list says anything: some round was rated, or the work times really differ
+     * (work until done, skipped rounds, per-round deltas). Identical rounds are just noise.
+     */
+    val worthListingRounds: Boolean
+        get() = averageRating != null ||
+            (rounds.size > 1 && rounds.maxOf { it.workMs } - rounds.minOf { it.workMs } > DIFFERENT_MS)
+
     val averageWorkMs: Long get() = if (rounds.isEmpty()) 0 else rounds.sumOf { it.workMs } / rounds.size
 
     /** Mean of the rounds that were rated, null when none were. */
     val averageRating: Double? get() = rounds.mapNotNull { it.rating }.takeIf { it.isNotEmpty() }?.average()
+
+    private companion object {
+        /** Round work times closer than this count as equal, so timing jitter doesn't produce a list. */
+        const val DIFFERENT_MS = 1_000L
+    }
 }

@@ -21,6 +21,7 @@ class RoutineJsonTest {
                 ),
             ),
             coolDown = Phase.of(PhaseKind.COOL_DOWN, 60),
+            rateEffort = true,
         )
 
         val decoded = RoutineJson.decode(RoutineJson.encode(routines))
@@ -37,6 +38,7 @@ class RoutineJsonTest {
         assertEquals("old", routine.name)
         assertEquals(1, routine.blocks.single().rounds)
         assertEquals(PhaseKind.WORK, routine.blocks.single().phases.single().kind)
+        assertEquals(false, routine.rateEffort)
     }
 
     @Test

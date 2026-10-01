@@ -7,6 +7,7 @@ import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.Column
 import androidx.compose.foundation.layout.Row
+import androidx.compose.foundation.layout.Spacer
 import androidx.compose.foundation.layout.fillMaxSize
 import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.foundation.layout.height
@@ -77,7 +78,6 @@ fun RunningScreen(
     onSkip: () -> Unit,
     onStop: () -> Unit,
     onClose: () -> Unit,
-    ratingEnabled: Boolean = false,
     onRate: (Int?) -> Unit = {},
 ) {
     KeepScreenOn(keepScreenOn)
@@ -93,7 +93,7 @@ fun RunningScreen(
             } else {
                 Header(state)
                 RunningBody(Modifier.weight(1f), state)
-                if (ratingEnabled && state.segment?.rateable == true) {
+                if (state.rateEffort && state.segment?.rateable == true) {
                     RatingButtons(state.rating, onRate)
                 }
                 Controls(state.segment?.manual == true, state.status == Status.PAUSED, onPause, onResume, onSkip, onStop)
@@ -252,7 +252,7 @@ private fun ControlButton(label: String, modifier: Modifier, onClick: () -> Unit
     }
 }
 
-/** The finish screen: total time, work time and each round's real times (the point of work until done). */
+/** The finish screen: total and work time, plus each round's real times and effort when they say something. */
 @Composable
 private fun DoneBody(modifier: Modifier, state: TimerState, onClose: () -> Unit) {
     val summary = WorkoutSummary(state.results)
@@ -262,13 +262,19 @@ private fun DoneBody(modifier: Modifier, state: TimerState, onClose: () -> Unit)
         Row(modifier = Modifier.fillMaxWidth().padding(vertical = 12.dp), horizontalArrangement = Arrangement.spacedBy(8.dp)) {
             Stat("Total", formatMs(summary.totalMs), Modifier.weight(1f))
             Stat("Work", formatMs(summary.workMs), Modifier.weight(1f))
-            if (summary.rounds.size > 1) Stat("Avg work", formatMs(summary.averageWorkMs), Modifier.weight(1f))
+            if (summary.worthListingRounds && summary.rounds.size > 1) {
+                Stat("Avg work", formatMs(summary.averageWorkMs), Modifier.weight(1f))
+            }
             summary.averageRating?.let { Stat("Avg effort", "%.1f".format(Locale.US, it), Modifier.weight(1f)) }
         }
-        val longest = summary.rounds.maxOfOrNull { it.workMs } ?: 0
-        val showRating = summary.averageRating != null
-        LazyColumn(modifier = Modifier.weight(1f).fillMaxWidth(), verticalArrangement = Arrangement.spacedBy(8.dp)) {
-            items(summary.rounds) { round -> RoundRow(round, longest, showBlock = summary.rounds.any { it.block > 1 }, showRating) }
+        if (summary.worthListingRounds) {
+            val longest = summary.rounds.maxOfOrNull { it.workMs } ?: 0
+            val showRating = summary.averageRating != null
+            LazyColumn(modifier = Modifier.weight(1f).fillMaxWidth(), verticalArrangement = Arrangement.spacedBy(8.dp)) {
+                items(summary.rounds) { round -> RoundRow(round, longest, showBlock = summary.rounds.any { it.block > 1 }, showRating) }
+            }
+        } else {
+            Spacer(Modifier.weight(1f))
         }
         ControlButton("Close", Modifier.fillMaxWidth().padding(top = 12.dp), onClose)
     }

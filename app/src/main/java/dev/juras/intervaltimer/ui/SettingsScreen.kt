@@ -103,7 +103,6 @@ fun SettingsScreen(settings: Settings, onChange: (Settings) -> Unit, onBack: () 
             ToggleRow("Lower other audio while a cue plays", settings.ducking, settings.mode.sound) { onChange(settings.copy(ducking = it)) }
             ToggleRow("Speak phase names", settings.voice, settings.mode.sound) { onChange(settings.copy(voice = it)) }
             ToggleRow("Keep screen on while running", settings.keepScreenOn) { onChange(settings.copy(keepScreenOn = it)) }
-            ToggleRow("Rate each work phase 1–10", settings.rating) { onChange(settings.copy(rating = it)) }
         }
     }
 }

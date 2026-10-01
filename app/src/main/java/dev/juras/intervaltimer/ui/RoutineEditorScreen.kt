@@ -128,6 +128,12 @@ fun RoutineEditorScreen(
                 Text(if (routine.isOpenEnded) "Total $timed plus however long your work takes" else "Total $timed", fontSize = 16.sp)
             }
             item {
+                Row(verticalAlignment = Alignment.CenterVertically) {
+                    Switch(checked = routine.rateEffort, onCheckedChange = { onChange(routine.copy(rateEffort = it)) })
+                    Text("Rate effort 1–10 during work", fontSize = 16.sp, modifier = Modifier.weight(1f).padding(start = 12.dp))
+                }
+            }
+            item {
                 OptionalPhase("Get ready first", routine.warmUp, PhaseKind.WARM_UP, 10) { onChange(routine.copy(warmUp = it)) }
             }
             itemsIndexed(routine.blocks) { i, block ->
