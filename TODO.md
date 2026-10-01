@@ -30,6 +30,7 @@
 
 ## Effort rating
 - Tried on the phone by the user on 2026-09-30: works. Not separately checked: the "Undo stop" snackbar covers the bottom row of rating buttons for its 3 seconds.
+- Per-routine switch tested on the phone by Claude on 2026-10-01 (adb, throwaway routine): the switch survives a process kill; buttons show only with the switch on, none on rest or with it off; a rated run shows the round list with `–` for the unrated round and Avg effort; a run with the switch on but nothing rated gets the short done screen; a skipped round brings the list back without a rating column; Settings has no rating row. No `E`/`W` lines in the app log.
 
 ## Known gaps
 - Process death mid-routine loses the running state (the service stops with the process). **Approach:** only if it happens in practice; persist the routine and start time and rebuild the engine.
